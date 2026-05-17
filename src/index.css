@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #1f2933;
+  background: #f8f0dd;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #f8f0dd;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 18px 18px, rgba(20, 91, 215, 0.05) 1px, transparent 1px),
+    linear-gradient(115deg, rgba(255, 255, 255, 0.38), transparent 38%),
+    #f8f0dd;
+  background-size: 30px 30px, 100% 100%, auto;
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .paper-shell {
+    background:
+      linear-gradient(90deg, rgba(20, 91, 215, 0.08) 1px, transparent 1px),
+      linear-gradient(rgba(20, 91, 215, 0.04) 1px, transparent 1px),
+      #fbf4e5;
+    background-size: 34px 34px;
+  }
+
+  .sketch-card {
+    border: 2px solid rgba(31, 41, 51, 0.68);
+    border-radius: 18px 14px 20px 16px;
+    background: rgba(255, 251, 239, 0.88);
+    box-shadow: 4px 5px 0 rgba(20, 91, 215, 0.12);
+  }
+
+  .sketch-card-blue {
+    border-color: rgba(20, 91, 215, 0.78);
+    box-shadow: 5px 6px 0 rgba(20, 91, 215, 0.14);
+  }
+
+  .sketch-card-green {
+    border-color: rgba(33, 150, 83, 0.72);
+    box-shadow: 5px 6px 0 rgba(33, 150, 83, 0.12);
+  }
+
+  .sketch-card-orange {
+    border-color: rgba(242, 153, 74, 0.74);
+    box-shadow: 5px 6px 0 rgba(242, 153, 74, 0.14);
+  }
+
+  .sketch-card-purple {
+    border-color: rgba(125, 76, 194, 0.72);
+    box-shadow: 5px 6px 0 rgba(125, 76, 194, 0.12);
+  }
+
+  .sketch-input {
+    min-height: 48px;
+    width: 100%;
+    border: 2px solid rgba(31, 41, 51, 0.62);
+    border-radius: 13px 11px 15px 12px;
+    background: rgba(255, 255, 255, 0.62);
+    padding: 0.7rem 0.9rem;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .sketch-input:focus {
+    border-color: #145bd7;
+    background: #fffdf6;
+    box-shadow: 0 0 0 4px rgba(20, 91, 215, 0.12);
+  }
+
+  .sketch-button {
+    min-height: 52px;
+    border: 2px solid rgba(31, 41, 51, 0.7);
+    border-radius: 16px 13px 18px 14px;
+    background: rgba(255, 253, 246, 0.9);
+    box-shadow: 3px 4px 0 rgba(31, 41, 51, 0.12);
+    transition: transform 120ms ease, box-shadow 120ms ease, background 160ms ease;
+  }
+
+  .sketch-button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 rgba(31, 41, 51, 0.16);
+  }
+
+  .sketch-button-primary {
+    border-color: #145bd7;
+    background: #145bd7;
+    color: #fffdf6;
+    box-shadow: 4px 5px 0 rgba(20, 91, 215, 0.25);
+  }
+
+  .sketch-button-green {
+    border-color: #219653;
+    background: #e7f7ee;
+    color: #146c3b;
+  }
+
+  .sketch-button-danger {
+    border-color: #e84a5f;
+    color: #b92035;
+    background: #fff0f2;
+  }
+
+  .crayon-title {
+    color: #111827;
+    font-family: "Comic Sans MS", "Segoe Print", "Noto Sans TC", system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .crayon-underline {
+    position: relative;
+  }
+
+  .crayon-underline::after {
+    content: "";
+    position: absolute;
+    left: 0.08em;
+    right: 0.08em;
+    bottom: -0.12em;
+    height: 0.24em;
+    border-radius: 999px;
+    background: rgba(20, 91, 215, 0.22);
+    z-index: -1;
+  }
+
+  .tape {
+    position: absolute;
+    width: 70px;
+    height: 24px;
+    border: 2px solid rgba(31, 41, 51, 0.18);
+    background:
+      repeating-linear-gradient(
+        -28deg,
+        rgba(255, 255, 255, 0.18) 0,
+        rgba(255, 255, 255, 0.18) 7px,
+        transparent 7px,
+        transparent 13px
+      ),
+      rgba(242, 201, 76, 0.75);
+    transform: rotate(-8deg);
+  }
+
+  .doodle-star {
+    color: #f2994a;
+    font-family: "Comic Sans MS", cursive;
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+}
+
+@media (max-width: 900px) {
+  .ipad-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
