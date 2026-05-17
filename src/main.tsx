@@ -1,22 +1,22 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { App } from "./App";
 import { AppDataProvider } from "./context/AppDataContext";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <HashRouter>
       <AppDataProvider>
         <App />
       </AppDataProvider>
-    </BrowserRouter>
+    </HashRouter>
   </React.StrictMode>
 );
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js");
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
   });
 }
