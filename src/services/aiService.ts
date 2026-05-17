@@ -191,6 +191,7 @@ async function analyzeQuestionWithGoogleAI(input: {
           },
         ],
         generationConfig: {
+          responseMimeType: "application/json",
           thinkingConfig: {
             thinkingLevel: "HIGH",
           },
@@ -252,14 +253,76 @@ function parseGoogleAIText(rawText: string): unknown {
 }
 
 function parseJSONFromModelText(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const source = fenced?.[1] ?? text;
-  const first = source.indexOf("{");
-  const last = source.lastIndexOf("}");
-  if (first < 0 || last < first) {
-    throw new Error("AI 沒有回傳可解析的 JSON，請重試或改用手動模式。");
+  const fencedBlocks = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(
+    (match) => match[1]
+  );
+  const sources = fencedBlocks.length ? [...fencedBlocks, text] : [text];
+
+  for (const source of sources) {
+    const parsed = parseFirstJSONValue(source);
+    if (parsed !== null) return parsed;
   }
-  return JSON.parse(source.slice(first, last + 1));
+
+  throw new Error("AI 回傳格式不完整，請再試一次，或改用手動模式。");
+}
+
+function parseFirstJSONValue(source: string): unknown | null {
+  const openingBrackets = new Set(["{", "["]);
+  const closingByOpening: Record<string, string> = {
+    "{": "}",
+    "[": "]",
+  };
+
+  for (let start = 0; start < source.length; start += 1) {
+    const firstChar = source[start];
+    if (!openingBrackets.has(firstChar)) continue;
+
+    const stack: string[] = [closingByOpening[firstChar]];
+    let inString = false;
+    let isEscaped = false;
+
+    for (let index = start + 1; index < source.length; index += 1) {
+      const char = source[index];
+
+      if (inString) {
+        if (isEscaped) {
+          isEscaped = false;
+          continue;
+        }
+        if (char === "\\") {
+          isEscaped = true;
+          continue;
+        }
+        if (char === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = true;
+        continue;
+      }
+
+      if (openingBrackets.has(char)) {
+        stack.push(closingByOpening[char]);
+        continue;
+      }
+
+      if (char === "}" || char === "]") {
+        if (stack.pop() !== char) break;
+        if (stack.length === 0) {
+          try {
+            return JSON.parse(source.slice(start, index + 1));
+          } catch {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeAIResult(value: unknown): AIQuestionAnalysisResult {

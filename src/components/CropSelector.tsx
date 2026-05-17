@@ -183,19 +183,21 @@ export function CropSelector({
 
   return (
     <div className="space-y-3">
-      <div
-        ref={frameRef}
-        className={`relative overflow-hidden rounded-[20px] border-4 border-slate-700 bg-slate-100 touch-none ${
-          isInteracting ? "cursor-grabbing" : "cursor-crosshair"
-        }`}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
+      <div className="overflow-auto rounded-[20px] border-4 border-slate-700 bg-slate-100 p-2">
+        <div
+          ref={frameRef}
+          className={`relative mx-auto max-w-full overflow-hidden touch-none ${
+            isInteracting ? "cursor-grabbing" : "cursor-crosshair"
+          }`}
+          style={{ width: "fit-content" }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
         <img
           src={imageUrl}
           alt="題目照片"
-          className="block max-h-[520px] w-full select-none object-contain"
+          className="block h-auto max-h-[70vh] max-w-full select-none object-contain"
           draggable={false}
         />
         <div
@@ -224,6 +226,7 @@ export function CropSelector({
               onPointerDown={(event) => startDrag(event, handle.mode)}
             />
           ))}
+        </div>
         </div>
       </div>
       <p className="text-center text-sm font-bold leading-6 text-crayon-blue md:whitespace-nowrap">

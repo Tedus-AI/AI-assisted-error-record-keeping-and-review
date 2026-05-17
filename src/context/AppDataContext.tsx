@@ -66,9 +66,14 @@ const emptyAIUsage: AIUsage = {
 };
 
 function stripPendingReviewForStorage(review: PendingAIReview): PendingAIReview {
-  if (!review.imageUrl?.startsWith("data:")) return review;
-  const { imageUrl, ...storableReview } = review;
-  return storableReview;
+  const nextReview = { ...review };
+  if (nextReview.imageUrl?.startsWith("data:")) {
+    delete nextReview.imageUrl;
+  }
+  if (nextReview.croppedImageUrl?.startsWith("data:")) {
+    delete nextReview.croppedImageUrl;
+  }
+  return nextReview;
 }
 
 function parentUnlockKey(userId: string) {

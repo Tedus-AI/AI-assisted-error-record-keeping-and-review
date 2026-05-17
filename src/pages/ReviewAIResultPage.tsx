@@ -76,8 +76,12 @@ export function ReviewAIResultPage() {
 
   const save = async (status: "approved" | "needs_manual_edit") => {
     if (!selectedChild || !pending) return;
-    const persistedImageUrl =
+    const persistedOriginalImageUrl =
       pending.imageUrl && !pending.imageUrl.startsWith("data:") ? pending.imageUrl : undefined;
+    const persistedCroppedImageUrl =
+      pending.croppedImageUrl && !pending.croppedImageUrl.startsWith("data:")
+        ? pending.croppedImageUrl
+        : undefined;
     const aiModel = user?.isDemo ? "mock_gemma_free" : getGoogleAISettings().modelId;
     const normalizedOptions = optionsForAnswerType(answerType, options);
     const normalizedAnswer = normalizeAnswerForType(correctAnswer, answerType);
@@ -93,8 +97,8 @@ export function ReviewAIResultPage() {
         topic,
         questionType,
         answerType,
-        originalImageUrl: persistedImageUrl,
-        croppedImageUrl: persistedImageUrl,
+        originalImageUrl: persistedOriginalImageUrl,
+        croppedImageUrl: persistedCroppedImageUrl ?? persistedOriginalImageUrl,
         cropMeta: pending.cropMeta,
         originalQuestionText,
         convertedQuestion,
@@ -139,6 +143,8 @@ export function ReviewAIResultPage() {
   }
 
   const lowConfidence = pending.result.confidence < 0.75;
+  const reviewImageUrl = pending.croppedImageUrl ?? pending.imageUrl;
+  const shouldShowCropOverlay = Boolean(!pending.croppedImageUrl && pending.cropMeta);
 
   return (
     <div>
@@ -185,11 +191,11 @@ export function ReviewAIResultPage() {
       <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
         <div className="space-y-5">
           <HandCard className="p-4" tone="purple" tape>
-            <h2 className="crayon-title mb-3 text-2xl">原始圖片</h2>
-            {pending.imageUrl ? (
+            <h2 className="crayon-title mb-3 text-2xl">AI 看到的圖片</h2>
+            {reviewImageUrl ? (
               <div className="relative overflow-hidden rounded-[18px] border-2 border-slate-500 bg-white">
-                <img src={pending.imageUrl} alt="AI 解析原始圖片" className="w-full" />
-                {pending.cropMeta && (
+                <img src={reviewImageUrl} alt="AI 解析裁切圖片" className="w-full" />
+                {shouldShowCropOverlay && pending.cropMeta && (
                   <div
                     className="absolute border-4 border-crayon-blue"
                     style={{
@@ -209,9 +215,9 @@ export function ReviewAIResultPage() {
           </HandCard>
 
           <HandCard className="p-4" tone="green">
-            <h2 className="crayon-title mb-3 text-2xl">裁切後圖片</h2>
+            <h2 className="crayon-title mb-3 text-2xl">送出圖片</h2>
             <div className="rounded-[18px] border-2 border-slate-400 bg-white/65 p-4 text-sm font-semibold leading-6 text-slate-600">
-              MVP 目前保存原圖與框選資訊，後續可接 Canvas 匯出真正裁切圖片。
+              AI 解析已改用 Canvas 實際裁切圖；上方圖片就是送給模型的內容。
             </div>
           </HandCard>
         </div>

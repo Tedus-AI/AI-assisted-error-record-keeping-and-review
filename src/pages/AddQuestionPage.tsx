@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   Camera,
@@ -23,7 +23,10 @@ import { PageHeader } from "../components/PageHeader";
 import { difficultyOptions, errorReasonOptions, subjectOptions } from "../data/options";
 import { analyzeQuestion } from "../services/aiService";
 import { hasGoogleAISettings } from "../services/aiSettings";
-import { fileToCompressedDataUrl } from "../services/storageService";
+import {
+  fileToCompressedDataUrl,
+  fileToCroppedDataUrl,
+} from "../services/storageService";
 import { useAppData } from "../hooks/useAppData";
 import type { AnswerType, CropMeta, Difficulty, QuestionOption } from "../types";
 
@@ -54,6 +57,7 @@ export function AddQuestionPage() {
   const [aiText, setAiText] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [cropPreview, setCropPreview] = useState("");
   const [crop, setCrop] = useState<CropMeta>(initialCrop);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -80,9 +84,39 @@ export function AddQuestionPage() {
   const handleFile = async (file?: File) => {
     if (!file) return;
     setImageFile(file);
+    setCrop(initialCrop);
+    setCropPreview("");
     const preview = URL.createObjectURL(file);
     setImagePreview(preview);
   };
+
+  useEffect(() => {
+    if (!imagePreview.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setCropPreview("");
+      return;
+    }
+
+    let isCanceled = false;
+    const timeoutId = window.setTimeout(() => {
+      void fileToCroppedDataUrl(imageFile, crop, 720, 0.86)
+        .then((preview) => {
+          if (!isCanceled) setCropPreview(preview);
+        })
+        .catch(() => {
+          if (!isCanceled) setCropPreview("");
+        });
+    }, 180);
+
+    return () => {
+      isCanceled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [crop, imageFile]);
 
   const saveManual = async () => {
     setError("");
@@ -157,7 +191,13 @@ export function AddQuestionPage() {
 
     setIsSaving(true);
     try {
-      const imageDataUrl = imageFile ? await fileToCompressedDataUrl(imageFile) : undefined;
+      const originalImageDataUrl = imageFile
+        ? await fileToCompressedDataUrl(imageFile)
+        : undefined;
+      const croppedImageDataUrl = imageFile
+        ? await fileToCroppedDataUrl(imageFile, crop)
+        : undefined;
+      const imageDataUrl = croppedImageDataUrl ?? originalImageDataUrl;
       setUploadProgress(imageDataUrl ? 100 : 0);
       const result = await analyzeQuestion({
         imageUrl: imageDataUrl,
@@ -165,7 +205,12 @@ export function AddQuestionPage() {
         text: aiText,
         useMock: user.isDemo,
       });
-      savePendingAIReview({ imageUrl: imageDataUrl, cropMeta: crop, result });
+      savePendingAIReview({
+        imageUrl: originalImageDataUrl,
+        croppedImageUrl: croppedImageDataUrl,
+        cropMeta: crop,
+        result,
+      });
       refreshAIUsage();
       navigate("/review-ai-result");
     } catch (err) {
@@ -379,7 +424,24 @@ export function AddQuestionPage() {
             </div>
 
             {imagePreview ? (
-              <CropSelector imageUrl={imagePreview} crop={crop} onChange={setCrop} />
+              <div className="space-y-4">
+                <CropSelector imageUrl={imagePreview} crop={crop} onChange={setCrop} />
+                {cropPreview && (
+                  <div className="rounded-[18px] border-2 border-crayon-blue bg-blue-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="font-bold text-crayon-blue">AI 送出裁切預覽</span>
+                      <span className="text-xs font-bold text-slate-500">
+                        這張圖會送給模型
+                      </span>
+                    </div>
+                    <img
+                      src={cropPreview}
+                      alt="AI 送出裁切預覽"
+                      className="max-h-64 w-full rounded-[12px] border-2 border-white object-contain"
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[22px] border-4 border-dashed border-crayon-blue bg-blue-50/50 p-8 text-center">
                 <Upload className="mb-4 text-crayon-blue" size={54} />

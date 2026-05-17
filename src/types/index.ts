@@ -125,6 +125,7 @@ export interface CropMeta {
 
 export interface PendingAIReview {
   imageUrl?: string;
+  croppedImageUrl?: string;
   cropMeta?: CropMeta;
   result: {
     subject: string;
