@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { AIDebugPanel } from "../components/AIDebugPanel";
 import { EmptyState } from "../components/EmptyState";
 import { HandCard } from "../components/HandCard";
 import {
@@ -211,6 +212,8 @@ export function ReviewAIResultPage() {
               AI 解析使用實際裁切圖；上方圖片就是送給模型的內容。
             </div>
           </HandCard>
+
+          {pending.debug && <AIDebugPanel debug={pending.debug} />}
         </div>
 
         <HandCard className="p-5" tone="blue" tape>

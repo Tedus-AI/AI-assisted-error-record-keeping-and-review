@@ -5,7 +5,12 @@ import {
   recordGoogleAIUsage,
 } from "./aiSettings";
 import { answerTypeForQuestionType } from "../data/options";
-import type { AnswerType, QuestionOption, QuestionType } from "../types";
+import type {
+  AIDebugSnapshot,
+  AnswerType,
+  QuestionOption,
+  QuestionType,
+} from "../types";
 
 export interface AIQuestionAnalysisResult {
   subject: string;
@@ -18,6 +23,7 @@ export interface AIQuestionAnalysisResult {
   explanation: string;
   confidence: number;
   needsUserReview: boolean;
+  debug?: AIDebugSnapshot;
 }
 
 interface AnalyzeQuestionInput {
@@ -34,6 +40,20 @@ const trueFalseOptions: QuestionOption[] = [
   { label: "A", text: "對" },
   { label: "B", text: "錯" },
 ];
+
+export class AIQuestionDebugError extends Error {
+  debug: AIDebugSnapshot;
+
+  constructor(message: string, debug: AIDebugSnapshot) {
+    super(message);
+    this.name = "AIQuestionDebugError";
+    this.debug = debug;
+  }
+}
+
+export function getAIQuestionDebug(error: unknown) {
+  return error instanceof AIQuestionDebugError ? error.debug : null;
+}
 
 export async function analyzeQuestion(
   input: AnalyzeQuestionInput
@@ -61,7 +81,20 @@ export async function analyzeQuestion(
   });
 
   await new Promise((resolve) => window.setTimeout(resolve, 600));
-  return normalizeAIResult(createMockResult(input), input);
+  const prompt = buildPrompt(input);
+  const mockJson = createMockResult(input);
+  const result = normalizeAIResult(mockJson, input);
+  const debug = createBaseDebugSnapshot({
+    input,
+    provider: "mock",
+    modelId: "mock_gemma_free",
+    prompt,
+    requestBodyPreview: safeStringify({ mock: true, text: input.text ?? "", hasImage: Boolean(input.imageDataUrl) }),
+  });
+  debug.stage = "mock";
+  debug.parsedJson = mockJson;
+  debug.normalizedResult = resultForDebug(result);
+  return { ...result, debug };
 }
 
 export function getAIUsage() {
@@ -129,6 +162,7 @@ function buildPrompt(input: AnalyzeQuestionInput) {
 
 請只根據圖片中裁切出的題目內容進行解析。使用者選定的科目與題目類型是最終規則，不要自行改成別的題型。
 若圖片文字不清楚，也要盡量回傳可辨識內容，不要讓欄位空白。
+JSON 格式中的空字串只是欄位示意，不可以照抄空白範例；若真的看不清楚，請填「辨識不清」。
 只回傳 JSON，不要 Markdown，不要額外說明。`;
 
   const extraText = input.text?.trim()
@@ -250,6 +284,91 @@ function dataUrlToInlineData(dataUrl: string) {
   };
 }
 
+const debugTextLimit = 30_000;
+
+function clipText(text: string, limit = debugTextLimit) {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n...（已截斷 ${text.length - limit} 個字元）`;
+}
+
+function safeStringify(value: unknown) {
+  try {
+    return clipText(JSON.stringify(value, null, 2));
+  } catch {
+    return "無法轉成 JSON 顯示";
+  }
+}
+
+function getImageDebug(input: AnalyzeQuestionInput): AIDebugSnapshot["image"] {
+  const inlineData = input.imageDataUrl ? dataUrlToInlineData(input.imageDataUrl) : null;
+  if (!inlineData) {
+    return { hasImage: false };
+  }
+
+  return {
+    hasImage: true,
+    mimeType: inlineData.mimeType,
+    base64Chars: inlineData.data.length,
+    estimatedBytes: Math.round((inlineData.data.length * 3) / 4),
+  };
+}
+
+function redactRequestBody(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactRequestBody(item));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  if ("inlineData" in record) {
+    const inlineData = record.inlineData as { mimeType?: string; data?: string } | undefined;
+    return {
+      inlineData: {
+        mimeType: inlineData?.mimeType ?? "unknown",
+        data: inlineData?.data
+          ? `<base64 image omitted: ${inlineData.data.length} chars>`
+          : "<no image data>",
+      },
+    };
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).map(([key, item]) => [key, redactRequestBody(item)])
+  );
+}
+
+function createBaseDebugSnapshot(input: {
+  input: AnalyzeQuestionInput;
+  provider: AIDebugSnapshot["provider"];
+  modelId: string;
+  prompt: string;
+  requestBodyPreview: string;
+  endpoint?: string;
+}): AIDebugSnapshot {
+  return {
+    createdAt: new Date().toISOString(),
+    provider: input.provider,
+    modelId: input.modelId,
+    stage: "request_ready",
+    subject: input.input.subject,
+    questionType: input.input.questionType,
+    answerType: answerTypeForQuestionType(input.input.questionType),
+    textInput: input.input.text?.trim() || undefined,
+    endpoint: input.endpoint,
+    image: getImageDebug(input.input),
+    prompt: input.prompt,
+    requestBodyPreview: input.requestBodyPreview,
+  };
+}
+
+function resultForDebug(result: AIQuestionAnalysisResult) {
+  const { debug, ...resultWithoutDebug } = result;
+  void debug;
+  return resultWithoutDebug;
+}
+
 async function analyzeQuestionWithGoogleAI(
   input: AnalyzeQuestionInput
 ): Promise<AIQuestionAnalysisResult> {
@@ -258,8 +377,9 @@ async function analyzeQuestionWithGoogleAI(
     throw new Error("尚未設定 Google AI Studio API Key，請先到設定頁填入 API Key。");
   }
 
+  const prompt = buildPrompt(input);
   const inlineData = input.imageDataUrl ? dataUrlToInlineData(input.imageDataUrl) : undefined;
-  const parts: Array<Record<string, unknown>> = [{ text: buildPrompt(input) }];
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
   if (inlineData) {
     parts.push({ inlineData });
   }
@@ -267,6 +387,29 @@ async function analyzeQuestionWithGoogleAI(
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 300_000);
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${settings.modelId}:streamGenerateContent?key=${encodeURIComponent(settings.apiKey)}`;
+  const endpointForDebug = `https://generativelanguage.googleapis.com/v1beta/models/${settings.modelId}:streamGenerateContent?key=REDACTED`;
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts,
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: {
+        thinkingLevel: "HIGH",
+      },
+    },
+  };
+  const debug = createBaseDebugSnapshot({
+    input,
+    provider: "google_ai",
+    modelId: settings.modelId,
+    prompt,
+    endpoint: endpointForDebug,
+    requestBodyPreview: safeStringify(redactRequestBody(requestBody)),
+  });
 
   try {
     const response = await fetch(endpoint, {
@@ -275,34 +418,61 @@ async function analyzeQuestionWithGoogleAI(
         "Content-Type": "application/json",
       },
       signal: controller.signal,
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts,
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          thinkingConfig: {
-            thinkingLevel: "HIGH",
-          },
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const rawText = await response.text();
+    debug.httpStatus = response.status;
+    debug.rawResponse = clipText(rawText);
+    debug.stage = "raw_response";
+
     if (!response.ok) {
-      throw new Error(formatGoogleAIError(rawText, response.status));
+      const message = formatGoogleAIError(rawText, response.status);
+      throw new AIQuestionDebugError(message, {
+        ...debug,
+        stage: "http_error",
+        errorMessage: message,
+      });
     }
 
-    recordGoogleAIUsage(settings.modelId);
-    return normalizeAIResult(parseGoogleAIText(rawText), input);
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Google AI 解析逾時，請稍後重試，或改用另一個模型。");
+    let parsed: ReturnType<typeof parseGoogleAITextForDebug>;
+    try {
+      parsed = parseGoogleAITextForDebug(rawText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 回傳格式不完整。";
+      throw new AIQuestionDebugError(message, {
+        ...debug,
+        stage: "parse_error",
+        errorMessage: message,
+      });
     }
-    throw error;
+
+    debug.extractedModelText = clipText(parsed.extractedModelText);
+    debug.parsedJson = parsed.parsedJson;
+    const result = normalizeAIResult(parsed.parsedJson, input);
+    debug.normalizedResult = resultForDebug(result);
+    debug.stage = "normalized";
+
+    recordGoogleAIUsage(settings.modelId);
+    return { ...result, debug };
+  } catch (error) {
+    if (error instanceof AIQuestionDebugError) {
+      throw error;
+    }
+    if (error instanceof DOMException && error.name === "AbortError") {
+      const message = "Google AI 解析逾時，請稍後重試，或改用另一個模型。";
+      throw new AIQuestionDebugError(message, {
+        ...debug,
+        stage: "timeout",
+        errorMessage: message,
+      });
+    }
+    const message = error instanceof Error ? error.message : "Google AI 解析失敗，請稍後再試。";
+    throw new AIQuestionDebugError(message, {
+      ...debug,
+      stage: "unknown_error",
+      errorMessage: message,
+    });
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -320,12 +490,18 @@ function formatGoogleAIError(rawText: string, status: number) {
   }
 }
 
-function parseGoogleAIText(rawText: string): unknown {
+function parseGoogleAITextForDebug(rawText: string): {
+  extractedModelText: string;
+  parsedJson: unknown;
+} {
   let response: unknown;
   try {
     response = JSON.parse(rawText);
   } catch {
-    return parseJSONFromModelText(rawText);
+    return {
+      extractedModelText: rawText,
+      parsedJson: parseJSONFromModelText(rawText),
+    };
   }
 
   const chunks = Array.isArray(response) ? response : [response];
@@ -341,7 +517,10 @@ function parseGoogleAIText(rawText: string): unknown {
     })
     .join("");
 
-  return parseJSONFromModelText(text || rawText);
+  return {
+    extractedModelText: text || rawText,
+    parsedJson: parseJSONFromModelText(text || rawText),
+  };
 }
 
 function parseJSONFromModelText(text: string): unknown {

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CropSelector } from "../components/CropSelector";
+import { AIDebugPanel } from "../components/AIDebugPanel";
 import { HandCard } from "../components/HandCard";
 import {
   OptionEditor,
@@ -25,14 +26,19 @@ import {
   questionTypeOptions,
   subjectOptions,
 } from "../data/options";
-import { analyzeQuestion } from "../services/aiService";
+import { analyzeQuestion, getAIQuestionDebug } from "../services/aiService";
 import { hasGoogleAISettings } from "../services/aiSettings";
 import {
   fileToCompressedDataUrl,
   fileToCroppedDataUrl,
 } from "../services/storageService";
 import { useAppData } from "../hooks/useAppData";
-import type { CropMeta, QuestionOption, QuestionType } from "../types";
+import type {
+  AIDebugSnapshot,
+  CropMeta,
+  QuestionOption,
+  QuestionType,
+} from "../types";
 
 const initialCrop: CropMeta = { x: 12, y: 20, width: 72, height: 34 };
 
@@ -63,6 +69,7 @@ export function AddQuestionPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [debugSnapshot, setDebugSnapshot] = useState<AIDebugSnapshot | null>(null);
 
   const aiDailyLimit = user?.isDemo ? 10 : 1500;
   const canUseAi = aiUsage.dailyAiCallCount < aiDailyLimit;
@@ -172,6 +179,7 @@ export function AddQuestionPage() {
   const analyzeWithAi = async () => {
     setError("");
     setMessage("");
+    setDebugSnapshot(null);
     if (!selectedChild || !user) {
       setError("請先登入並選擇小朋友。");
       return;
@@ -208,15 +216,20 @@ export function AddQuestionPage() {
         text: aiText,
         useMock: user.isDemo,
       });
+      const { debug, ...reviewResult } = result;
+      setDebugSnapshot(debug ?? null);
       savePendingAIReview({
         imageUrl: originalImageDataUrl,
         croppedImageUrl: croppedImageDataUrl,
         cropMeta: crop,
-        result,
+        debug,
+        result: reviewResult,
       });
       refreshAIUsage();
       navigate("/review-ai-result");
     } catch (err) {
+      const debug = getAIQuestionDebug(err);
+      if (debug) setDebugSnapshot(debug);
       setError(err instanceof Error ? err.message : "AI 解析失敗，請稍後再試。");
     } finally {
       setIsSaving(false);
@@ -465,6 +478,12 @@ export function AddQuestionPage() {
               改用手動新增
             </button>
           </HandCard>
+
+          {debugSnapshot && (
+            <div className="xl:col-span-2">
+              <AIDebugPanel debug={debugSnapshot} />
+            </div>
+          )}
         </div>
       )}
     </div>

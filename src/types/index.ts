@@ -119,10 +119,45 @@ export interface CropMeta {
   height: number;
 }
 
+export interface AIDebugSnapshot {
+  createdAt: string;
+  provider: "google_ai" | "mock";
+  modelId: string;
+  stage:
+    | "mock"
+    | "request_ready"
+    | "raw_response"
+    | "http_error"
+    | "parse_error"
+    | "normalized"
+    | "timeout"
+    | "unknown_error";
+  subject: string;
+  questionType: QuestionType;
+  answerType: AnswerType;
+  textInput?: string;
+  endpoint?: string;
+  httpStatus?: number;
+  image: {
+    hasImage: boolean;
+    mimeType?: string;
+    base64Chars?: number;
+    estimatedBytes?: number;
+  };
+  prompt: string;
+  requestBodyPreview: string;
+  rawResponse?: string;
+  extractedModelText?: string;
+  parsedJson?: unknown;
+  normalizedResult?: unknown;
+  errorMessage?: string;
+}
+
 export interface PendingAIReview {
   imageUrl?: string;
   croppedImageUrl?: string;
   cropMeta?: CropMeta;
+  debug?: AIDebugSnapshot;
   result: {
     subject: string;
     questionType: QuestionType;
