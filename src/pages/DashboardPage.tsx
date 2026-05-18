@@ -185,7 +185,7 @@ export function DashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{question.convertedQuestion}</p>
                   <p className="text-sm font-semibold text-slate-500">
-                    {question.subject} / {question.unit}
+                    {question.subject} / {question.questionType}
                   </p>
                 </div>
                 <StatusBadge status={question.reviewStatus} />

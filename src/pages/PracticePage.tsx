@@ -185,7 +185,7 @@ export function PracticePage() {
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-bold text-slate-500">
-            {currentQuestion.subject} | {currentQuestion.unit}
+            {currentQuestion.subject} | {currentQuestion.questionType}
           </p>
           <h1 className="crayon-title text-4xl sm:text-5xl">
             第 <span className="text-crayon-blue">{index + 1}</span> /{" "}

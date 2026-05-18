@@ -7,7 +7,7 @@ export type QuestionStatus =
 
 export type AnswerType = "multiple_choice" | "true_false";
 
-export type Difficulty = "easy" | "medium" | "hard";
+export type QuestionType = "是非題" | "選擇題" | "改錯字" | "應用題";
 
 export type SourceType = "manual" | "photo" | "ai";
 
@@ -30,9 +30,7 @@ export interface Question {
   id: string;
   childId: string;
   subject: string;
-  unit: string;
-  topic?: string;
-  questionType: string;
+  questionType: QuestionType;
   answerType: AnswerType;
   originalImageUrl?: string;
   croppedImageUrl?: string;
@@ -44,8 +42,6 @@ export interface Question {
   aiSuggestedAnswer?: string;
   confirmedAnswer?: string;
   explanation?: string;
-  errorReason?: string;
-  difficulty: Difficulty;
   sourceType: SourceType;
   aiProcessed: boolean;
   aiProcessCount: number;
@@ -79,7 +75,7 @@ export interface ReviewSession {
   id: string;
   childId: string;
   subject?: string;
-  unit?: string;
+  questionType?: QuestionType;
   questionCount: number;
   correctCount: number;
   wrongCount: number;
@@ -110,7 +106,7 @@ export interface ParentSecurityProfile {
 export interface PracticeConfig {
   childId: string;
   subject?: string;
-  unit?: string;
+  questionType?: QuestionType;
   questionCount: number;
   prioritizeWrong: boolean;
   excludeMastered: boolean;
@@ -129,17 +125,13 @@ export interface PendingAIReview {
   cropMeta?: CropMeta;
   result: {
     subject: string;
-    unit: string;
-    topic: string;
-    questionType: string;
+    questionType: QuestionType;
     originalQuestionText: string;
     convertedQuestion: string;
     answerType: AnswerType;
     options: QuestionOption[];
     correctAnswer: string;
     explanation: string;
-    errorReasonSuggestion: string;
-    difficulty: Difficulty;
     confidence: number;
     needsUserReview: boolean;
   };

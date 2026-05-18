@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Edit3,
   FolderPlus,
-  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -17,10 +16,14 @@ import {
   optionsForAnswerType,
 } from "../components/OptionEditor";
 import { PageHeader } from "../components/PageHeader";
-import { difficultyOptions, errorReasonOptions, subjectOptions } from "../data/options";
+import {
+  answerTypeForQuestionType,
+  questionTypeOptions,
+  subjectOptions,
+} from "../data/options";
 import { useAppData } from "../hooks/useAppData";
 import { getGoogleAISettings } from "../services/aiSettings";
-import type { AnswerType, Difficulty, PendingAIReview, QuestionOption } from "../types";
+import type { PendingAIReview, QuestionOption, QuestionType } from "../types";
 
 export function ReviewAIResultPage() {
   const {
@@ -32,18 +35,14 @@ export function ReviewAIResultPage() {
   } = useAppData();
   const navigate = useNavigate();
   const [pending, setPending] = useState<PendingAIReview | null>(null);
-  const [subject, setSubject] = useState("數學");
-  const [unit, setUnit] = useState("");
-  const [topic, setTopic] = useState("");
-  const [questionType, setQuestionType] = useState("");
-  const [answerType, setAnswerType] = useState<AnswerType>("multiple_choice");
+  const [subject, setSubject] = useState(subjectOptions[1]);
+  const [questionType, setQuestionType] = useState<QuestionType>("選擇題");
+  const answerType = answerTypeForQuestionType(questionType);
   const [originalQuestionText, setOriginalQuestionText] = useState("");
   const [convertedQuestion, setConvertedQuestion] = useState("");
   const [options, setOptions] = useState<QuestionOption[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState("A");
   const [explanation, setExplanation] = useState("");
-  const [errorReason, setErrorReason] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -53,10 +52,7 @@ export function ReviewAIResultPage() {
     setPending(review);
     if (!review) return;
     setSubject(review.result.subject);
-    setUnit(review.result.unit);
-    setTopic(review.result.topic);
     setQuestionType(review.result.questionType);
-    setAnswerType(review.result.answerType);
     setOriginalQuestionText(review.result.originalQuestionText);
     setConvertedQuestion(review.result.convertedQuestion);
     setOptions(optionsForAnswerType(review.result.answerType, review.result.options));
@@ -64,12 +60,11 @@ export function ReviewAIResultPage() {
       normalizeAnswerForType(review.result.correctAnswer, review.result.answerType)
     );
     setExplanation(review.result.explanation);
-    setErrorReason(review.result.errorReasonSuggestion);
-    setDifficulty(review.result.difficulty);
   }, [getPendingAIReview]);
 
-  const handleAnswerTypeChange = (nextAnswerType: AnswerType) => {
-    setAnswerType(nextAnswerType);
+  const handleQuestionTypeChange = (nextQuestionType: QuestionType) => {
+    const nextAnswerType = answerTypeForQuestionType(nextQuestionType);
+    setQuestionType(nextQuestionType);
     setOptions((current) => optionsForAnswerType(nextAnswerType, current));
     setCorrectAnswer((current) => normalizeAnswerForType(current, nextAnswerType));
   };
@@ -93,8 +88,6 @@ export function ReviewAIResultPage() {
       await addQuestion({
         childId: selectedChild.id,
         subject,
-        unit,
-        topic,
         questionType,
         answerType,
         originalImageUrl: persistedOriginalImageUrl,
@@ -107,8 +100,6 @@ export function ReviewAIResultPage() {
         aiSuggestedAnswer: pending.result.correctAnswer,
         confirmedAnswer: status === "approved" ? normalizedAnswer : undefined,
         explanation,
-        errorReason,
-        difficulty,
         sourceType: "photo",
         aiProcessed: true,
         aiProcessCount: 1,
@@ -121,12 +112,12 @@ export function ReviewAIResultPage() {
         totalAttemptCount: 0,
         masteryLevel: 0,
         lastReviewedAt: null,
-        tags: [subject, unit, topic].filter(Boolean),
+        tags: [subject, questionType],
       });
       clearPendingAIReview();
-      navigate(status === "approved" ? "/question-bank" : "/question-bank");
+      navigate("/question-bank");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "儲存失敗，請稍後重試。");
+      setError(err instanceof Error ? err.message : "儲存失敗，請再試一次。");
     } finally {
       setIsSaving(false);
     }
@@ -137,7 +128,7 @@ export function ReviewAIResultPage() {
       <EmptyState
         icon={AlertTriangle}
         title="沒有待確認的 AI 結果"
-        description="請先到新增錯題頁上傳圖片或輸入題目，完成 mock AI 解析後再回到此頁。"
+        description="請回到新增錯題，拍照或選圖後重新解析。"
       />
     );
   }
@@ -150,7 +141,7 @@ export function ReviewAIResultPage() {
     <div>
       <PageHeader
         title="AI 解析確認"
-        eyebrow="AI 結果必須由家長確認後才可進入複習"
+        eyebrow="AI 結果必須由家長確認後才可進入複習。"
         actions={
           <Link
             to="/add-question"
@@ -183,7 +174,7 @@ export function ReviewAIResultPage() {
         </span>
         {lowConfidence && (
           <span className="rounded-[16px] border-2 border-crayon-red bg-red-50 px-4 py-2 font-bold text-crayon-red">
-            AI 對此題解析信心較低，請務必確認題目與答案。
+            信心較低，請確認題目與答案。
           </span>
         )}
       </div>
@@ -217,7 +208,7 @@ export function ReviewAIResultPage() {
           <HandCard className="p-4" tone="green">
             <h2 className="crayon-title mb-3 text-2xl">送出圖片</h2>
             <div className="rounded-[18px] border-2 border-slate-400 bg-white/65 p-4 text-sm font-semibold leading-6 text-slate-600">
-              AI 解析已改用 Canvas 實際裁切圖；上方圖片就是送給模型的內容。
+              AI 解析使用實際裁切圖；上方圖片就是送給模型的內容。
             </div>
           </HandCard>
         </div>
@@ -228,7 +219,7 @@ export function ReviewAIResultPage() {
             AI 解析結果
           </h2>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             <label>
               <span className="mb-2 block font-bold">科目</span>
               <select
@@ -242,20 +233,18 @@ export function ReviewAIResultPage() {
               </select>
             </label>
             <label>
-              <span className="mb-2 block font-bold">單元</span>
-              <input
-                className="sketch-input"
-                value={unit}
-                onChange={(event) => setUnit(event.target.value)}
-              />
-            </label>
-            <label>
-              <span className="mb-2 block font-bold">題型</span>
-              <input
+              <span className="mb-2 block font-bold">題目類型</span>
+              <select
                 className="sketch-input"
                 value={questionType}
-                onChange={(event) => setQuestionType(event.target.value)}
-              />
+                onChange={(event) =>
+                  handleQuestionTypeChange(event.target.value as QuestionType)
+                }
+              >
+                {questionTypeOptions.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
             </label>
           </div>
 
@@ -268,7 +257,7 @@ export function ReviewAIResultPage() {
             />
           </label>
           <label className="mt-4 block">
-            <span className="mb-2 block font-bold">AI 轉換後題目</span>
+            <span className="mb-2 block font-bold">複習題目</span>
             <textarea
               className="sketch-input min-h-[92px]"
               value={convertedQuestion}
@@ -276,38 +265,24 @@ export function ReviewAIResultPage() {
             />
           </label>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label>
-              <span className="mb-2 block font-bold">答案類型</span>
-              <select
-                className="sketch-input"
-                value={answerType}
-                onChange={(event) =>
-                  handleAnswerTypeChange(event.target.value as AnswerType)
-                }
-              >
-                <option value="multiple_choice">選擇題</option>
-                <option value="true_false">是非題</option>
-              </select>
-            </label>
-            <label>
-              <span className="mb-2 block font-bold">正確答案</span>
-              <select
-                className="sketch-input"
-                value={correctAnswer}
-                onChange={(event) => setCorrectAnswer(event.target.value)}
-              >
-                {optionsForAnswerType(answerType, options).map((option) => (
-                  <option key={option.label} value={option.label}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
           <div className="mt-4">
-            <span className="mb-2 block font-bold">選項內容</span>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <span className="block font-bold">選項內容</span>
+              <label className="flex items-center gap-2 font-bold">
+                正確答案
+                <select
+                  className="sketch-input w-24"
+                  value={correctAnswer}
+                  onChange={(event) => setCorrectAnswer(event.target.value)}
+                >
+                  {optionsForAnswerType(answerType, options).map((option) => (
+                    <option key={option.label} value={option.label}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <OptionEditor
               answerType={answerType}
               options={options}
@@ -315,46 +290,16 @@ export function ReviewAIResultPage() {
             />
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label>
-              <span className="mb-2 block font-bold">解題說明</span>
-              <textarea
-                className="sketch-input min-h-[150px]"
-                value={explanation}
-                onChange={(event) => setExplanation(event.target.value)}
-              />
-            </label>
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-2 block font-bold">錯因建議</span>
-                <select
-                  className="sketch-input"
-                  value={errorReason}
-                  onChange={(event) => setErrorReason(event.target.value)}
-                >
-                  {errorReasonOptions.map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block font-bold">難度</span>
-                <select
-                  className="sketch-input"
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value as Difficulty)}
-                >
-                  {difficultyOptions.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+          <label className="mt-4 block">
+            <span className="mb-2 block font-bold">解題說明</span>
+            <textarea
+              className="sketch-input min-h-[150px]"
+              value={explanation}
+              onChange={(event) => setExplanation(event.target.value)}
+            />
+          </label>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <button
               className="sketch-button sketch-button-primary flex items-center justify-center gap-2 px-4 text-lg font-bold"
               onClick={() => void save("approved")}
@@ -369,14 +314,7 @@ export function ReviewAIResultPage() {
               disabled={isSaving}
             >
               <Edit3 size={24} />
-              暫存需修改
-            </button>
-            <button
-              className="sketch-button flex items-center justify-center gap-2 px-4 text-lg font-bold text-crayon-purple"
-              onClick={() => setMessage("MVP 預設每題只允許 AI 分析一次；請手動修正欄位後儲存。")}
-            >
-              <RotateCcw size={24} />
-              重新解析
+              先存待修改
             </button>
             <button
               className="sketch-button sketch-button-danger flex items-center justify-center gap-2 px-4 text-lg font-bold"
@@ -391,7 +329,7 @@ export function ReviewAIResultPage() {
           </div>
           <p className="mt-4 flex items-center gap-2 rounded-[16px] border-2 border-crayon-green bg-green-50 p-3 text-sm font-bold text-crayon-green">
             <CheckCircle2 size={20} />
-            「儲存進題庫」會核准為 approved 並進入複習；「暫存需修改」會先存成 needs_manual_edit，之後可到題庫編輯再核准。
+            信心分數只供參考；請以家長確認後的題目與答案為準。
           </p>
         </HandCard>
       </div>

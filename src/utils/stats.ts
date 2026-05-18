@@ -31,6 +31,24 @@ export function groupBySubject(questions: Question[]) {
   });
 }
 
+export function groupByQuestionType(questions: Question[]) {
+  return unique(questions.map((question) => question.questionType)).map((questionType) => {
+    const related = questions.filter((question) => question.questionType === questionType);
+    const totalAttempts = related.reduce(
+      (sum, question) => sum + question.totalAttemptCount,
+      0
+    );
+    const correct = related.reduce((sum, question) => sum + question.correctCount, 0);
+
+    return {
+      questionType,
+      count: related.length,
+      wrongCount: related.reduce((sum, question) => sum + question.wrongCount, 0),
+      accuracy: accuracy(correct, totalAttempts),
+    };
+  });
+}
+
 export function getWeeklyAttempts(attempts: Attempt[]) {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   return attempts.filter((attempt) => new Date(attempt.attemptedAt).getTime() >= weekAgo);

@@ -19,16 +19,20 @@ import {
 } from "../components/OptionEditor";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
-import { difficultyOptions, errorReasonOptions, subjectOptions } from "../data/options";
+import {
+  answerTypeForQuestionType,
+  questionTypeOptions,
+  subjectOptions,
+} from "../data/options";
 import { useAppData } from "../hooks/useAppData";
-import type { AnswerType, Difficulty, Question, QuestionStatus } from "../types";
+import type { Question, QuestionOption, QuestionStatus, QuestionType } from "../types";
 import { masteryLabel } from "../utils/mastery";
 
 const statusOptions: { value: "all" | QuestionStatus; label: string }[] = [
   { value: "all", label: "全部" },
-  { value: "approved", label: "已核准" },
+  { value: "approved", label: "已確認" },
   { value: "pending_review", label: "待確認" },
-  { value: "needs_manual_edit", label: "需修正" },
+  { value: "needs_manual_edit", label: "待修改" },
   { value: "archived", label: "已封存" },
 ];
 
@@ -41,10 +45,10 @@ function EditQuestionPanel({
 }) {
   const { updateQuestion } = useAppData();
   const [subject, setSubject] = useState(question.subject);
-  const [unit, setUnit] = useState(question.unit);
+  const [questionType, setQuestionType] = useState<QuestionType>(question.questionType);
+  const answerType = answerTypeForQuestionType(questionType);
   const [convertedQuestion, setConvertedQuestion] = useState(question.convertedQuestion);
-  const [answerType, setAnswerType] = useState<AnswerType>(question.answerType);
-  const [options, setOptions] = useState(
+  const [options, setOptions] = useState<QuestionOption[]>(
     optionsForAnswerType(question.answerType, question.options)
   );
   const [correctAnswer, setCorrectAnswer] = useState(
@@ -54,11 +58,10 @@ function EditQuestionPanel({
     )
   );
   const [explanation, setExplanation] = useState(question.explanation ?? "");
-  const [errorReason, setErrorReason] = useState(question.errorReason ?? "其他");
-  const [difficulty, setDifficulty] = useState<Difficulty>(question.difficulty);
 
-  const handleAnswerTypeChange = (nextAnswerType: AnswerType) => {
-    setAnswerType(nextAnswerType);
+  const handleQuestionTypeChange = (nextQuestionType: QuestionType) => {
+    const nextAnswerType = answerTypeForQuestionType(nextQuestionType);
+    setQuestionType(nextQuestionType);
     setOptions((current) => optionsForAnswerType(nextAnswerType, current));
     setCorrectAnswer((current) => normalizeAnswerForType(current, nextAnswerType));
   };
@@ -68,17 +71,16 @@ function EditQuestionPanel({
     const normalizedAnswer = normalizeAnswerForType(correctAnswer, answerType);
     await updateQuestion(question.id, {
       subject,
-      unit,
+      questionType,
       convertedQuestion,
       answerType,
       options: normalizedOptions,
       correctAnswer: normalizedAnswer,
       confirmedAnswer: normalizedAnswer,
       explanation,
-      errorReason,
-      difficulty,
       isUserConfirmed: true,
       reviewStatus: "approved",
+      tags: [subject, questionType],
     });
     onClose();
   };
@@ -89,11 +91,14 @@ function EditQuestionPanel({
         <HandCard className="p-5" tone="blue" tape>
           <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="crayon-title text-3xl">編輯題目</h2>
-            <button className="touch-target rounded-full border-2 border-slate-400 bg-white" onClick={onClose}>
+            <button
+              className="touch-target rounded-full border-2 border-slate-400 bg-white"
+              onClick={onClose}
+            >
               <X className="m-auto" />
             </button>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <label>
               <span className="mb-2 block font-bold">科目</span>
               <select
@@ -107,24 +112,17 @@ function EditQuestionPanel({
               </select>
             </label>
             <label>
-              <span className="mb-2 block font-bold">單元</span>
-              <input
-                className="sketch-input"
-                value={unit}
-                onChange={(event) => setUnit(event.target.value)}
-              />
-            </label>
-            <label>
-              <span className="mb-2 block font-bold">答案類型</span>
+              <span className="mb-2 block font-bold">題目類型</span>
               <select
                 className="sketch-input"
-                value={answerType}
+                value={questionType}
                 onChange={(event) =>
-                  handleAnswerTypeChange(event.target.value as AnswerType)
+                  handleQuestionTypeChange(event.target.value as QuestionType)
                 }
               >
-                <option value="multiple_choice">選擇題</option>
-                <option value="true_false">是非題</option>
+                {questionTypeOptions.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
               </select>
             </label>
           </div>
@@ -160,50 +158,20 @@ function EditQuestionPanel({
               onChange={setOptions}
             />
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label>
-              <span className="mb-2 block font-bold">解題說明</span>
-              <textarea
-                className="sketch-input min-h-[140px]"
-                value={explanation}
-                onChange={(event) => setExplanation(event.target.value)}
-              />
-            </label>
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-2 block font-bold">錯因</span>
-                <select
-                  className="sketch-input"
-                  value={errorReason}
-                  onChange={(event) => setErrorReason(event.target.value)}
-                >
-                  {errorReasonOptions.map((item) => (
-                    <option key={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block font-bold">難度</span>
-                <select
-                  className="sketch-input"
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value as Difficulty)}
-                >
-                  {difficultyOptions.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+          <label className="mt-4 block">
+            <span className="mb-2 block font-bold">解題說明</span>
+            <textarea
+              className="sketch-input min-h-[140px]"
+              value={explanation}
+              onChange={(event) => setExplanation(event.target.value)}
+            />
+          </label>
           <button
             className="sketch-button sketch-button-primary mt-5 flex w-full items-center justify-center gap-2 text-xl font-bold"
             onClick={() => void save()}
           >
             <CheckCircle2 size={25} />
-            儲存並核准
+            儲存題目
           </button>
         </HandCard>
       </div>
@@ -221,7 +189,7 @@ export function QuestionBankPage() {
   } = useAppData();
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
-  const [unitFilter, setUnitFilter] = useState("all");
+  const [questionTypeFilter, setQuestionTypeFilter] = useState<"all" | QuestionType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | QuestionStatus>("all");
   const [masteryFilter, setMasteryFilter] = useState("all");
   const [editing, setEditing] = useState<Question | null>(null);
@@ -229,19 +197,20 @@ export function QuestionBankPage() {
   const childQuestions = questions.filter(
     (question) => question.childId === selectedChild?.id
   );
-  const units = Array.from(new Set(childQuestions.map((question) => question.unit)));
   const filtered = useMemo(() => {
     return childQuestions.filter((question) => {
-      const haystack = `${question.convertedQuestion} ${question.subject} ${question.unit}`;
+      const haystack = `${question.convertedQuestion} ${question.subject} ${question.questionType}`;
       if (search && !haystack.toLowerCase().includes(search.toLowerCase())) return false;
       if (subjectFilter !== "all" && question.subject !== subjectFilter) return false;
-      if (unitFilter !== "all" && question.unit !== unitFilter) return false;
+      if (questionTypeFilter !== "all" && question.questionType !== questionTypeFilter) {
+        return false;
+      }
       if (statusFilter !== "all" && question.reviewStatus !== statusFilter) return false;
       if (masteryFilter === "low" && question.masteryLevel > 2) return false;
       if (masteryFilter === "mastered" && question.masteryLevel < 5) return false;
       return true;
     });
-  }, [childQuestions, masteryFilter, search, statusFilter, subjectFilter, unitFilter]);
+  }, [childQuestions, masteryFilter, questionTypeFilter, search, statusFilter, subjectFilter]);
 
   const counts = {
     total: childQuestions.length,
@@ -271,7 +240,7 @@ export function QuestionBankPage() {
     <div>
       <PageHeader
         title="題庫管理"
-        eyebrow="管理已建檔錯題與複習狀態"
+        eyebrow="管理已確認與待確認的錯題，複習時不再呼叫 AI。"
         actions={
           <Link
             to="/add-question"
@@ -290,7 +259,7 @@ export function QuestionBankPage() {
               className="sketch-input pl-11"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋題目關鍵字"
+              placeholder="搜尋題目、科目或題型"
             />
           </label>
           <select
@@ -307,11 +276,13 @@ export function QuestionBankPage() {
           </select>
           <select
             className="sketch-input"
-            value={unitFilter}
-            onChange={(event) => setUnitFilter(event.target.value)}
+            value={questionTypeFilter}
+            onChange={(event) =>
+              setQuestionTypeFilter(event.target.value as "all" | QuestionType)
+            }
           >
-            <option value="all">單元：全部</option>
-            {units.map((item) => (
+            <option value="all">題型：全部</option>
+            {questionTypeOptions.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -334,7 +305,7 @@ export function QuestionBankPage() {
             onChange={(event) => setMasteryFilter(event.target.value)}
           >
             <option value="all">熟練度：全部</option>
-            <option value="low">低熟練度</option>
+            <option value="low">低熟練</option>
             <option value="mastered">已熟練</option>
           </select>
         </div>
@@ -342,10 +313,10 @@ export function QuestionBankPage() {
 
       <div className="mb-5 grid gap-3 md:grid-cols-5">
         {[
-          ["總題目數", counts.total, "text-crayon-blue"],
-          ["已核准", counts.approved, "text-crayon-green"],
+          ["全部題目", counts.total, "text-crayon-blue"],
+          ["已確認", counts.approved, "text-crayon-green"],
           ["待確認", counts.pending, "text-crayon-orange"],
-          ["需人工編輯", counts.needsEdit, "text-crayon-purple"],
+          ["待修改", counts.needsEdit, "text-crayon-purple"],
           ["已封存", counts.archived, "text-slate-500"],
         ].map(([label, value, tone]) => (
           <HandCard key={label as string} className="p-3 text-center">
@@ -359,7 +330,7 @@ export function QuestionBankPage() {
         <EmptyState
           icon={BookOpen}
           title="沒有符合條件的題目"
-          description="可以調整篩選條件，或新增第一題錯題。"
+          description="可以調整篩選條件，或新增一題錯題。"
         />
       ) : (
         <HandCard className="overflow-hidden p-0" tone="blue">
@@ -367,9 +338,9 @@ export function QuestionBankPage() {
             <table className="w-full min-w-[980px] border-collapse text-left">
               <thead className="bg-blue-50 text-sm font-bold text-crayon-blue">
                 <tr>
-                  <th className="p-4">題目內容摘要</th>
+                  <th className="p-4">題目</th>
                   <th className="p-4">科目</th>
-                  <th className="p-4">單元</th>
+                  <th className="p-4">題型</th>
                   <th className="p-4">狀態</th>
                   <th className="p-4">熟練度</th>
                   <th className="p-4">正確/錯誤</th>
@@ -382,7 +353,7 @@ export function QuestionBankPage() {
                     <td className="max-w-[360px] p-4">
                       <p className="line-clamp-2 font-bold">{question.convertedQuestion}</p>
                       <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {question.errorReason || "尚未標記錯因"}
+                        {question.explanation || "尚未填寫解析"}
                       </p>
                     </td>
                     <td className="p-4">
@@ -390,7 +361,7 @@ export function QuestionBankPage() {
                         {question.subject}
                       </span>
                     </td>
-                    <td className="p-4 font-semibold text-slate-700">{question.unit}</td>
+                    <td className="p-4 font-semibold text-slate-700">{question.questionType}</td>
                     <td className="p-4">
                       <StatusBadge status={question.reviewStatus} />
                     </td>
@@ -420,7 +391,7 @@ export function QuestionBankPage() {
                             onClick={() => void approve(question)}
                           >
                             <CheckCircle2 size={18} />
-                            核准
+                            確認
                           </button>
                         )}
                         {question.reviewStatus !== "archived" && (

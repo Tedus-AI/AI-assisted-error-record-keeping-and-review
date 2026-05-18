@@ -4,33 +4,40 @@ import {
   hasGoogleAISettings,
   recordGoogleAIUsage,
 } from "./aiSettings";
+import { answerTypeForQuestionType } from "../data/options";
+import type { AnswerType, QuestionOption, QuestionType } from "../types";
 
 export interface AIQuestionAnalysisResult {
   subject: string;
-  unit: string;
-  topic: string;
-  questionType: string;
+  questionType: QuestionType;
   originalQuestionText: string;
   convertedQuestion: string;
-  answerType: "multiple_choice" | "true_false";
-  options: {
-    label: string;
-    text: string;
-  }[];
+  answerType: AnswerType;
+  options: QuestionOption[];
   correctAnswer: string;
   explanation: string;
-  errorReasonSuggestion: string;
-  difficulty: "easy" | "medium" | "hard";
   confidence: number;
   needsUserReview: boolean;
 }
 
-export async function analyzeQuestion(input: {
+interface AnalyzeQuestionInput {
+  subject: string;
+  questionType: QuestionType;
   imageUrl?: string;
   imageDataUrl?: string;
   text?: string;
   useMock?: boolean;
-}): Promise<AIQuestionAnalysisResult> {
+}
+
+const multipleChoiceLabels = ["A", "B", "C", "D"];
+const trueFalseOptions: QuestionOption[] = [
+  { label: "A", text: "對" },
+  { label: "B", text: "錯" },
+];
+
+export async function analyzeQuestion(
+  input: AnalyzeQuestionInput
+): Promise<AIQuestionAnalysisResult> {
   if (!input.useMock && hasGoogleAISettings()) {
     return analyzeQuestionWithGoogleAI(input);
   }
@@ -41,7 +48,7 @@ export async function analyzeQuestion(input: {
 
   const state = getLocalState();
   if (state.aiUsage.dailyAiCallCount >= 10) {
-    throw new Error("AI 額度已用完，請改用手動輸入模式。");
+    throw new Error("AI 解析今日額度已用完，請明天再試或改用手動新增。");
   }
 
   setLocalState({
@@ -53,67 +60,121 @@ export async function analyzeQuestion(input: {
     },
   });
 
-  await new Promise((resolve) => window.setTimeout(resolve, 900));
-
-  const hasText = input.text?.trim();
-
-  return {
-    subject: "數學",
-    unit: "分數",
-    topic: "分數應用題",
-    questionType: "應用題",
-    originalQuestionText:
-      hasText ||
-      "一包糖果有 24 顆，姐姐吃了這包糖果的 1/3，弟弟吃了剩下糖果的 1/2，弟弟吃了幾顆糖果？",
-    convertedQuestion:
-      hasText ||
-      "一包糖果有 24 顆，姐姐吃了 1/3，弟弟吃了剩下糖果的 1/2，弟弟吃了幾顆？",
-    answerType: "multiple_choice",
-    options: [
-      { label: "A", text: "2 顆" },
-      { label: "B", text: "3 顆" },
-      { label: "C", text: "4 顆" },
-      { label: "D", text: "8 顆" },
-    ],
-    correctAnswer: "D",
-    explanation:
-      "姐姐吃 24 ÷ 3 = 8 顆，剩下 24 - 8 = 16 顆；弟弟吃剩下的 1/2，所以是 16 ÷ 2 = 8 顆。",
-    errorReasonSuggestion: "分數乘除概念混淆",
-    difficulty: "hard",
-    confidence: input.imageUrl ? 0.86 : 0.78,
-    needsUserReview: true,
-  };
+  await new Promise((resolve) => window.setTimeout(resolve, 600));
+  return normalizeAIResult(createMockResult(input), input);
 }
 
 export function getAIUsage() {
   return getLocalState().aiUsage;
 }
 
-function buildMistakeReviewPrompt(text?: string) {
-  return `你是一個錯題整理助手，目標是協助家長將小朋友的錯題整理成可複習的題庫。
+function createMockResult(input: AnalyzeQuestionInput): Partial<AIQuestionAnalysisResult> {
+  const originalQuestionText =
+    input.text?.trim() ||
+    (input.questionType === "是非題"
+      ? "下列動物中，狗是昆蟲。"
+      : input.questionType === "改錯字"
+        ? "請圈出錯字：小明把作業寫得很工正。"
+        : "小明有 24 顆糖，先吃掉 1/3，剩下的再分給 2 個朋友，每人可分到幾顆？");
 
-請分析使用者提供的題目圖片或題目文字，並完成以下任務：
+  if (input.questionType === "是非題") {
+    return {
+      originalQuestionText,
+      convertedQuestion: originalQuestionText,
+      options: trueFalseOptions,
+      correctAnswer: "B",
+      explanation: "狗是哺乳類動物，不是昆蟲，所以這句話是錯的。",
+      confidence: input.imageUrl ? 0.82 : 0.75,
+    };
+  }
 
-1. 辨識題目內容。
-2. 判斷科目，例如：數學、國語、英文、自然、社會。
-3. 判斷單元與題型。
-4. 如果原題不是選擇題，請轉換成選擇題或是非題。
-5. 若轉換成選擇題，請產生 A/B/C/D 四個合理選項，選項不可過於明顯。
-6. 建議正確答案。
-7. 產生簡短解題說明。
-8. 建議可能錯因。
-9. 若你不確定，請將 confidence 設低，並將 needsUserReview 設為 true。
-10. 僅回傳 JSON，不要輸出 Markdown，不要輸出額外文字。
+  if (input.questionType === "改錯字") {
+    return {
+      originalQuestionText,
+      convertedQuestion: "「小明把作業寫得很工正」中的錯字應該怎麼改？",
+      options: [
+        { label: "A", text: "工正 → 公正" },
+        { label: "B", text: "工正 → 工整" },
+        { label: "C", text: "作業 → 做業" },
+        { label: "D", text: "小明 → 小名" },
+      ],
+      correctAnswer: "B",
+      explanation: "形容字寫得整齊應該用「工整」，不是「工正」。",
+      confidence: input.imageUrl ? 0.84 : 0.78,
+    };
+  }
 
-請使用以下 JSON 格式：
+  return {
+    originalQuestionText,
+    convertedQuestion: originalQuestionText,
+    options: [
+      { label: "A", text: "2 顆" },
+      { label: "B", text: "4 顆" },
+      { label: "C", text: "6 顆" },
+      { label: "D", text: "8 顆" },
+    ],
+    correctAnswer: input.questionType === "選擇題" ? "A" : "D",
+    explanation:
+      input.questionType === "選擇題"
+        ? "請依照原題選項判斷，這裡是示範解析。"
+        : "24 的 1/3 是 8，剩下 16，分給 2 個朋友，每人 8 顆。",
+    confidence: input.imageUrl ? 0.86 : 0.78,
+  };
+}
+
+function buildPrompt(input: AnalyzeQuestionInput) {
+  const sharedHeader = `你是小學錯題建檔助理。使用者已選擇：
+科目：${input.subject}
+題目類型：${input.questionType}
+
+請只根據圖片中裁切出的題目內容進行解析。使用者選定的科目與題目類型是最終規則，不要自行改成別的題型。
+若圖片文字不清楚，也要盡量回傳可辨識內容，不要讓欄位空白。
+只回傳 JSON，不要 Markdown，不要額外說明。`;
+
+  const extraText = input.text?.trim()
+    ? `\n\n使用者補充文字：\n${input.text.trim()}`
+    : "";
+
+  if (input.questionType === "是非題") {
+    return `${sharedHeader}
+
+任務：
+1. 完整抄寫圖片中的題目文字，不要改寫、不要補題、不要換題。
+2. 題目若有括號、編號、符號、單位，請盡量照原樣保留。
+3. 這是一題是非題，請不要轉成四選一選擇題。
+4. options 固定只回兩個：A=對、B=錯。
+5. 判斷正確答案是 A 或 B。
+6. 提供適合小學生理解的解題說明。
+
+JSON 格式：
 {
-  "subject": "",
-  "unit": "",
-  "topic": "",
-  "questionType": "",
   "originalQuestionText": "",
   "convertedQuestion": "",
-  "answerType": "multiple_choice",
+  "options": [
+    {"label": "A", "text": "對"},
+    {"label": "B", "text": "錯"}
+  ],
+  "correctAnswer": "A",
+  "explanation": "",
+  "confidence": 0.0
+}${extraText}`;
+  }
+
+  if (input.questionType === "選擇題") {
+    return `${sharedHeader}
+
+任務：
+1. 完整抄寫圖片中的題目與原本選項，不要改成別題。
+2. 若圖片選項是 ①②③④，請轉成 A/B/C/D，但選項文字必須照抄。
+3. 不要自行新增不存在的題目條件。
+4. 判斷正確答案。
+5. 提供解題說明。
+6. 若某個選項看不清楚，文字可標示「辨識不清」。
+
+JSON 格式：
+{
+  "originalQuestionText": "",
+  "convertedQuestion": "",
   "options": [
     {"label": "A", "text": ""},
     {"label": "B", "text": ""},
@@ -122,27 +183,62 @@ function buildMistakeReviewPrompt(text?: string) {
   ],
   "correctAnswer": "A",
   "explanation": "",
-  "errorReasonSuggestion": "",
-  "difficulty": "easy",
-  "confidence": 0.0,
-  "needsUserReview": true
-}
+  "confidence": 0.0
+}${extraText}`;
+  }
 
-欄位限制：
-- answerType 只能是 "multiple_choice" 或 "true_false"。
-- difficulty 只能是 "easy"、"medium"、"hard"。
-- correctAnswer 若為選擇題，只能是 "A"、"B"、"C"、"D"。
-- confidence 請使用 0 到 1 的數字。
+  if (input.questionType === "改錯字") {
+    return `${sharedHeader}
 
-${text?.trim() ? `使用者提供的題目文字：\n${text.trim()}` : "使用者可能提供了題目圖片，請以圖片內容為主。"}`;
-}
+任務：
+1. 完整抄寫原題文字，包含原句、錯字、題號與標點。
+2. 找出需要改正的錯字或錯詞。
+3. 將題目轉成選擇題，讓小朋友選出正確改法。
+4. convertedQuestion 要清楚問：「哪一個改法正確？」或「句中哪個字應改成哪個字？」
+5. options 提供 4 個選項，只有 1 個正確答案。
+6. 干擾選項要合理，但不能太離譜。
+7. explanation 說明錯在哪裡、正確字是什麼、為什麼。
 
-function appendCorrectionQuestionRule(prompt: string) {
-  return `${prompt}
+JSON 格式：
+{
+  "originalQuestionText": "",
+  "convertedQuestion": "",
+  "options": [
+    {"label": "A", "text": ""},
+    {"label": "B", "text": ""},
+    {"label": "C", "text": ""},
+    {"label": "D", "text": ""}
+  ],
+  "correctAnswer": "A",
+  "explanation": "",
+  "confidence": 0.0
+}${extraText}`;
+  }
 
-補充規則：若題目是改錯字、訂正錯字、圈錯字、找錯別字，請一律轉成 "multiple_choice"。
-convertedQuestion 請保留原句，並寫成「請找出句子中的錯字，並選出正確的字：...」。
-options 請提供 4 個可能的正確字或易混淆字，correctAnswer 指向真正應改成的字，explanation 說明為什麼要改成這個字。`;
+  return `${sharedHeader}
+
+任務：
+1. 完整抄寫圖片中的原始應用題，不要換題。
+2. convertedQuestion 可保留原題，或在不改變題意的前提下整理成更清楚的小朋友複習題。
+3. 將答案設計成四選一選擇題。
+4. 若原題已有選項，優先保留原選項並轉成 A/B/C/D。
+5. 若原題沒有選項，請產生 4 個合理選項，其中只有 1 個正確答案。
+6. explanation 要列出主要解題步驟。
+
+JSON 格式：
+{
+  "originalQuestionText": "",
+  "convertedQuestion": "",
+  "options": [
+    {"label": "A", "text": ""},
+    {"label": "B", "text": ""},
+    {"label": "C", "text": ""},
+    {"label": "D", "text": ""}
+  ],
+  "correctAnswer": "A",
+  "explanation": "",
+  "confidence": 0.0
+}${extraText}`;
 }
 
 function dataUrlToInlineData(dataUrl: string) {
@@ -154,20 +250,16 @@ function dataUrlToInlineData(dataUrl: string) {
   };
 }
 
-async function analyzeQuestionWithGoogleAI(input: {
-  imageUrl?: string;
-  imageDataUrl?: string;
-  text?: string;
-}): Promise<AIQuestionAnalysisResult> {
+async function analyzeQuestionWithGoogleAI(
+  input: AnalyzeQuestionInput
+): Promise<AIQuestionAnalysisResult> {
   const settings = getGoogleAISettings();
   if (!settings.apiKey) {
     throw new Error("尚未設定 Google AI Studio API Key，請先到設定頁填入 API Key。");
   }
 
-  const prompt = appendCorrectionQuestionRule(buildMistakeReviewPrompt(input.text));
-  const inlineData =
-    input.imageDataUrl ? dataUrlToInlineData(input.imageDataUrl) : undefined;
-  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  const inlineData = input.imageDataUrl ? dataUrlToInlineData(input.imageDataUrl) : undefined;
+  const parts: Array<Record<string, unknown>> = [{ text: buildPrompt(input) }];
   if (inlineData) {
     parts.push({ inlineData });
   }
@@ -205,10 +297,10 @@ async function analyzeQuestionWithGoogleAI(input: {
     }
 
     recordGoogleAIUsage(settings.modelId);
-    return normalizeAIResult(parseGoogleAIText(rawText));
+    return normalizeAIResult(parseGoogleAIText(rawText), input);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Google AI 解析逾時（5 分鐘），請稍後重試，或改用另一個模型。");
+      throw new Error("Google AI 解析逾時，請稍後重試，或改用另一個模型。");
     }
     throw error;
   } finally {
@@ -325,53 +417,39 @@ function parseFirstJSONValue(source: string): unknown | null {
   return null;
 }
 
-function normalizeAIResult(value: unknown): AIQuestionAnalysisResult {
+function normalizeAIResult(
+  value: unknown,
+  input: Pick<AnalyzeQuestionInput, "subject" | "questionType">
+): AIQuestionAnalysisResult {
   const data = value as Partial<AIQuestionAnalysisResult>;
-  const answerType =
-    data.answerType === "true_false" || data.answerType === "multiple_choice"
-      ? data.answerType
-      : "multiple_choice";
-  const labels = answerType === "true_false" ? ["A", "B"] : ["A", "B", "C", "D"];
+  const answerType = answerTypeForQuestionType(input.questionType);
+  const labels = answerType === "true_false" ? ["A", "B"] : multipleChoiceLabels;
+  const rawOptions = Array.isArray(data.options) ? data.options : [];
   const options =
     answerType === "true_false"
-      ? [
-          { label: "A", text: "是" },
-          { label: "B", text: "否" },
-        ]
-      : Array.isArray(data.options)
-        ? data.options.slice(0, 4).map((option, index) => ({
-            label: labels[index],
-            text: String(option?.text ?? ""),
-          }))
-        : [];
+      ? trueFalseOptions
+      : labels.map((label, index) => ({
+          label,
+          text: String(rawOptions.find((option) => option?.label === label)?.text ?? rawOptions[index]?.text ?? ""),
+        }));
 
-  while (options.length < labels.length) {
-    options.push({ label: labels[options.length], text: "" });
-  }
-
-  const difficulty =
-    data.difficulty === "easy" ||
-    data.difficulty === "medium" ||
-    data.difficulty === "hard"
-      ? data.difficulty
-      : "medium";
   const correctAnswer = String(data.correctAnswer ?? "A").trim().toUpperCase();
   const confidence = Number(data.confidence);
+  const originalQuestionText = String(data.originalQuestionText ?? "").trim();
+  const convertedQuestion = String(
+    data.convertedQuestion ?? data.originalQuestionText ?? ""
+  ).trim();
 
   return {
-    subject: String(data.subject ?? "未分類"),
-    unit: String(data.unit ?? "未分類單元"),
-    topic: String(data.topic ?? ""),
-    questionType: String(data.questionType ?? "題目"),
-    originalQuestionText: String(data.originalQuestionText ?? ""),
-    convertedQuestion: String(data.convertedQuestion ?? data.originalQuestionText ?? ""),
+    subject: input.subject,
+    questionType: input.questionType,
+    originalQuestionText,
+    convertedQuestion: convertedQuestion || originalQuestionText,
     answerType,
     options,
     correctAnswer: labels.includes(correctAnswer) ? correctAnswer : "A",
-    explanation: String(data.explanation ?? ""),
-    errorReasonSuggestion: String(data.errorReasonSuggestion ?? "其他"),
-    difficulty,
+    explanation: String(data.explanation ?? "").trim(),
     confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.65,
-    needsUserReview: data.needsUserReview !== false,
+    needsUserReview: true,
   };
 }

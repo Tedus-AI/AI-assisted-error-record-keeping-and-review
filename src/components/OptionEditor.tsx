@@ -2,8 +2,8 @@ import type { AnswerType, QuestionOption } from "../types";
 
 const labels = ["A", "B", "C", "D"];
 export const trueFalseOptions: QuestionOption[] = [
-  { label: "A", text: "是" },
-  { label: "B", text: "否" },
+  { label: "A", text: "對" },
+  { label: "B", text: "錯" },
 ];
 
 export function emptyOptions(answerType: AnswerType = "multiple_choice"): QuestionOption[] {

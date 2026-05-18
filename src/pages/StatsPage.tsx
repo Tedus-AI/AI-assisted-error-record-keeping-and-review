@@ -13,7 +13,12 @@ import { MasteryDots } from "../components/MasteryDots";
 import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
 import { useAppData } from "../hooks/useAppData";
-import { accuracy, getWeeklyAttempts, groupBySubject } from "../utils/stats";
+import {
+  accuracy,
+  getWeeklyAttempts,
+  groupByQuestionType,
+  groupBySubject,
+} from "../utils/stats";
 
 export function StatsPage() {
   const { selectedChild, questions, attempts, clearReviewRecords } = useAppData();
@@ -40,14 +45,8 @@ export function StatsPage() {
     .filter((question) => question.reviewStatus === "approved" && question.masteryLevel <= 2)
     .sort((a, b) => a.masteryLevel - b.masteryLevel || b.wrongCount - a.wrongCount)
     .slice(0, 6);
-  const unitWrong = Array.from(new Set(childQuestions.map((item) => item.unit)))
-    .map((unit) => ({
-      unit,
-      wrong: childQuestions
-        .filter((question) => question.unit === unit)
-        .reduce((sum, question) => sum + question.wrongCount, 0),
-    }))
-    .sort((a, b) => b.wrong - a.wrong)
+  const questionTypeStats = groupByQuestionType(childQuestions)
+    .sort((a, b) => b.wrongCount - a.wrongCount)
     .slice(0, 5);
 
   const clearRecords = async () => {
@@ -155,19 +154,24 @@ export function StatsPage() {
         </HandCard>
 
         <HandCard className="min-w-0 p-5" tone="blue">
-          <h2 className="crayon-title mb-5 text-3xl">各單元錯題數</h2>
+          <h2 className="crayon-title mb-5 text-3xl">各題型錯題數</h2>
           <div className="space-y-4">
-            {unitWrong.map((item) => (
-              <div key={item.unit}>
+            {questionTypeStats.map((item) => (
+              <div key={item.questionType}>
                 <div className="mb-2 flex flex-wrap justify-between gap-2 font-bold">
-                  <span className="min-w-0 break-words">{item.unit}</span>
-                  <span className="shrink-0">{item.wrong}</span>
+                  <span className="min-w-0 break-words">{item.questionType}</span>
+                  <span className="shrink-0">{item.wrongCount}</span>
                 </div>
                 <div className="h-8 rounded-full border-2 border-slate-300 bg-white">
                   <div
                     className="h-full rounded-full bg-crayon-red"
                     style={{
-                      width: `${Math.max(6, (item.wrong / Math.max(1, unitWrong[0]?.wrong ?? 1)) * 100)}%`,
+                      width: `${Math.max(
+                        6,
+                        (item.wrongCount /
+                          Math.max(1, questionTypeStats[0]?.wrongCount ?? 1)) *
+                          100
+                      )}%`,
                     }}
                   />
                 </div>

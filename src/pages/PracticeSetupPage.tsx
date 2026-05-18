@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, BookOpenCheck, Play, ShieldCheck, Target } from "lucide-react";
+import { ArrowLeft, Play, ShieldCheck, Target } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { HandCard } from "../components/HandCard";
 import { PageHeader } from "../components/PageHeader";
+import { questionTypeOptions } from "../data/options";
 import { useAppData } from "../hooks/useAppData";
-import type { PracticeConfig } from "../types";
+import type { PracticeConfig, QuestionType } from "../types";
 import { pickQuestions } from "../utils/questionPicker";
 
 export function PracticeSetupPage() {
@@ -17,14 +18,7 @@ export function PracticeSetupPage() {
   );
   const subjects = Array.from(new Set(approved.map((question) => question.subject)));
   const [subject, setSubject] = useState("");
-  const units = Array.from(
-    new Set(
-      approved
-        .filter((question) => !subject || question.subject === subject)
-        .map((question) => question.unit)
-    )
-  );
-  const [unit, setUnit] = useState("");
+  const [questionType, setQuestionType] = useState<"" | QuestionType>("");
   const [questionCount, setQuestionCount] = useState(10);
   const [prioritizeWrong, setPrioritizeWrong] = useState(true);
   const [excludeMastered, setExcludeMastered] = useState(false);
@@ -34,7 +28,7 @@ export function PracticeSetupPage() {
     ? {
         childId: selectedChild.id,
         subject: subject || undefined,
-        unit: unit || undefined,
+        questionType: questionType || undefined,
         questionCount,
         prioritizeWrong,
         excludeMastered,
@@ -52,7 +46,7 @@ export function PracticeSetupPage() {
   const start = () => {
     setError("");
     if (!config || picked.length === 0) {
-      setError("目前沒有符合條件的 approved 題目，請先新增或核准題目。");
+      setError("目前沒有符合條件的已確認題目，請先新增或調整篩選。");
       return;
     }
 
@@ -77,7 +71,7 @@ export function PracticeSetupPage() {
     <div>
       <PageHeader
         title="複習設定"
-        eyebrow="依科目與熟練度安排本次複習"
+        eyebrow="依科目、題型與熟練度安排練習，不會重新呼叫 AI。"
       />
 
       {error && (
@@ -94,10 +88,7 @@ export function PracticeSetupPage() {
               <select
                 className="sketch-input"
                 value={subject}
-                onChange={(event) => {
-                  setSubject(event.target.value);
-                  setUnit("");
-                }}
+                onChange={(event) => setSubject(event.target.value)}
               >
                 <option value="">全部科目</option>
                 {subjects.map((item) => (
@@ -108,14 +99,14 @@ export function PracticeSetupPage() {
               </select>
             </label>
             <label>
-              <span className="mb-2 block font-bold">單元</span>
+              <span className="mb-2 block font-bold">題目類型</span>
               <select
                 className="sketch-input"
-                value={unit}
-                onChange={(event) => setUnit(event.target.value)}
+                value={questionType}
+                onChange={(event) => setQuestionType(event.target.value as "" | QuestionType)}
               >
-                <option value="">全部單元</option>
-                {units.map((item) => (
+                <option value="">全部題型</option>
+                {questionTypeOptions.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
@@ -153,9 +144,9 @@ export function PracticeSetupPage() {
               <span className="flex items-center gap-3">
                 <Target className="text-crayon-blue" size={32} />
                 <span>
-                  <span className="block font-bold">是否優先錯題</span>
+                  <span className="block font-bold">優先複習錯過的題目</span>
                   <span className="text-sm font-semibold text-slate-500">
-                    優先安排孩子曾錯過的題目
+                    依答錯次數與熟練度排序
                   </span>
                 </span>
               </span>
@@ -171,7 +162,7 @@ export function PracticeSetupPage() {
               <span className="flex items-center gap-3">
                 <ShieldCheck className="text-crayon-green" size={32} />
                 <span>
-                  <span className="block font-bold">是否排除已熟練題</span>
+                  <span className="block font-bold">排除已熟練題目</span>
                   <span className="text-sm font-semibold text-slate-500">
                     排除 masteryLevel = 5 的題目
                   </span>
@@ -188,7 +179,7 @@ export function PracticeSetupPage() {
         </HandCard>
 
         <HandCard className="p-5" tone="green" tape>
-          <h2 className="crayon-title mb-4 text-3xl">本次複習預覽</h2>
+          <h2 className="crayon-title mb-4 text-3xl">本次複習</h2>
           <div className="mb-5 flex items-center gap-4">
             <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-crayon-blue bg-crayon-light text-3xl font-bold text-crayon-blue">
               {selectedChild?.name.slice(0, 1) ?? "小"}
@@ -200,7 +191,7 @@ export function PracticeSetupPage() {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-[16px] border-2 border-slate-300 bg-white/60 p-3">
-              <span className="font-bold">預估可用題目</span>
+              <span className="font-bold">可用題目</span>
               <span className="crayon-title text-3xl">{approved.length} 題</span>
             </div>
             <div className="flex items-center justify-between rounded-[16px] border-2 border-slate-300 bg-white/60 p-3">
@@ -211,11 +202,11 @@ export function PracticeSetupPage() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-[16px] border-2 border-crayon-purple bg-purple-50 p-3 text-center">
-                <p className="text-sm font-bold text-crayon-purple">低熟練度</p>
+                <p className="text-sm font-bold text-crayon-purple">低熟練</p>
                 <p className="crayon-title text-3xl">{lowMasteryCount}</p>
               </div>
               <div className="rounded-[16px] border-2 border-crayon-orange bg-orange-50 p-3 text-center">
-                <p className="text-sm font-bold text-crayon-orange">高風險</p>
+                <p className="text-sm font-bold text-crayon-orange">常錯</p>
                 <p className="crayon-title text-3xl">{highRiskCount}</p>
               </div>
               <div className="rounded-[16px] border-2 border-crayon-green bg-green-50 p-3 text-center">
@@ -246,7 +237,7 @@ export function PracticeSetupPage() {
             </button>
           </div>
           <p className="mt-4 rounded-[16px] border-2 border-crayon-blue bg-blue-50 p-3 text-sm font-bold text-crayon-blue">
-            系統會從 approved 題庫抽題。複習流程不呼叫 AI，也不重新生成題目。
+            複習只使用已確認題庫，不會消耗 AI 額度。
           </p>
         </HandCard>
       </div>
