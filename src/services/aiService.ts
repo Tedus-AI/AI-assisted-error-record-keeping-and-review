@@ -369,6 +369,44 @@ function resultForDebug(result: AIQuestionAnalysisResult) {
   return resultWithoutDebug;
 }
 
+function redactGoogleAIRawResponse(rawText: string) {
+  try {
+    const response = JSON.parse(rawText) as unknown;
+    const chunks = Array.isArray(response) ? response : [response];
+    const redactedChunks = chunks.map((chunk) => {
+      const record = getRecord(chunk);
+      if (!record) return chunk;
+      return {
+        ...record,
+        candidates: Array.isArray(record.candidates)
+          ? record.candidates.map((candidate) => {
+              const candidateRecord = getRecord(candidate);
+              if (!candidateRecord) return candidate;
+              const contentRecord = getRecord(candidateRecord.content);
+              const parts = Array.isArray(contentRecord?.parts)
+                ? contentRecord.parts.map((part) => {
+                    const partRecord = getRecord(part);
+                    if (!partRecord?.thought) return part;
+                    return {
+                      ...partRecord,
+                      text: "<thought omitted from debug view>",
+                    };
+                  })
+                : contentRecord?.parts;
+              return {
+                ...candidateRecord,
+                content: contentRecord ? { ...contentRecord, parts } : candidateRecord.content,
+              };
+            })
+          : record.candidates,
+      };
+    });
+    return safeStringify(Array.isArray(response) ? redactedChunks : redactedChunks[0]);
+  } catch {
+    return clipText(rawText);
+  }
+}
+
 async function analyzeQuestionWithGoogleAI(
   input: AnalyzeQuestionInput
 ): Promise<AIQuestionAnalysisResult> {
@@ -397,9 +435,6 @@ async function analyzeQuestionWithGoogleAI(
     ],
     generationConfig: {
       responseMimeType: "application/json",
-      thinkingConfig: {
-        thinkingLevel: "HIGH",
-      },
     },
   };
   const debug = createBaseDebugSnapshot({
@@ -423,7 +458,7 @@ async function analyzeQuestionWithGoogleAI(
 
     const rawText = await response.text();
     debug.httpStatus = response.status;
-    debug.rawResponse = clipText(rawText);
+    debug.rawResponse = redactGoogleAIRawResponse(rawText);
     debug.stage = "raw_response";
 
     if (!response.ok) {
@@ -505,21 +540,26 @@ function parseGoogleAITextForDebug(rawText: string): {
   }
 
   const chunks = Array.isArray(response) ? response : [response];
-  const text = chunks
-    .flatMap((chunk) => {
-      const candidates = (chunk as { candidates?: unknown[] }).candidates ?? [];
-      return candidates.flatMap((candidate) => {
-        const parts =
-          (candidate as { content?: { parts?: Array<{ text?: string }> } }).content
-            ?.parts ?? [];
-        return parts.map((part) => part.text ?? "");
-      });
-    })
+  const modelParts = chunks.flatMap((chunk) => {
+    const candidates = (chunk as { candidates?: unknown[] }).candidates ?? [];
+    return candidates.flatMap((candidate) => {
+      const parts =
+        (candidate as {
+          content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+        }).content?.parts ?? [];
+      return parts;
+    });
+  });
+  const answerText = modelParts
+    .filter((part) => !part.thought)
+    .map((part) => part.text ?? "")
     .join("");
+  const allText = modelParts.map((part) => part.text ?? "").join("");
+  const text = answerText || allText || rawText;
 
   return {
-    extractedModelText: text || rawText,
-    parsedJson: parseJSONFromModelText(text || rawText),
+    extractedModelText: text,
+    parsedJson: parseJSONFromModelText(text),
   };
 }
 
@@ -528,16 +568,27 @@ function parseJSONFromModelText(text: string): unknown {
     (match) => match[1]
   );
   const sources = fencedBlocks.length ? [...fencedBlocks, text] : [text];
+  const candidates = sources.flatMap((source) => parseJSONValues(source));
 
-  for (const source of sources) {
-    const parsed = parseFirstJSONValue(source);
-    if (parsed !== null) return parsed;
+  const rankedCandidates = candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreAIJsonCandidate(candidate),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const bestCandidate = rankedCandidates.find((candidate) => candidate.score > 0);
+  if (bestCandidate) {
+    return unwrapAIJsonCandidate(bestCandidate.candidate);
   }
+
+  if (candidates.length > 0) return candidates[0];
 
   throw new Error("AI 回傳格式不完整，請再試一次，或改用手動模式。");
 }
 
-function parseFirstJSONValue(source: string): unknown | null {
+function parseJSONValues(source: string): unknown[] {
+  const values: unknown[] = [];
   const openingBrackets = new Set(["{", "["]);
   const closingByOpening: Record<string, string> = {
     "{": "}",
@@ -584,7 +635,8 @@ function parseFirstJSONValue(source: string): unknown | null {
         if (stack.pop() !== char) break;
         if (stack.length === 0) {
           try {
-            return JSON.parse(source.slice(start, index + 1));
+            values.push(JSON.parse(source.slice(start, index + 1)));
+            start = index;
           } catch {
             break;
           }
@@ -593,14 +645,47 @@ function parseFirstJSONValue(source: string): unknown | null {
     }
   }
 
-  return null;
+  return values;
+}
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function unwrapAIJsonCandidate(value: unknown): unknown {
+  if (Array.isArray(value) && value.length === 1) {
+    const firstItem = getRecord(value[0]);
+    if (firstItem && scoreAIJsonRecord(firstItem) > 0) return firstItem;
+  }
+
+  return value;
+}
+
+function scoreAIJsonCandidate(value: unknown): number {
+  const unwrapped = unwrapAIJsonCandidate(value);
+  const record = getRecord(unwrapped);
+  if (!record) return 0;
+  return scoreAIJsonRecord(record);
+}
+
+function scoreAIJsonRecord(record: Record<string, unknown>): number {
+  let score = 0;
+  if (typeof record.originalQuestionText === "string") score += 3;
+  if (typeof record.convertedQuestion === "string") score += 3;
+  if (Array.isArray(record.options)) score += 2;
+  if (typeof record.correctAnswer === "string") score += 2;
+  if (typeof record.explanation === "string") score += 2;
+  if (typeof record.confidence === "number") score += 1;
+  return score;
 }
 
 function normalizeAIResult(
   value: unknown,
   input: Pick<AnalyzeQuestionInput, "subject" | "questionType">
 ): AIQuestionAnalysisResult {
-  const data = value as Partial<AIQuestionAnalysisResult>;
+  const data = unwrapAIJsonCandidate(value) as Partial<AIQuestionAnalysisResult>;
   const answerType = answerTypeForQuestionType(input.questionType);
   const labels = answerType === "true_false" ? ["A", "B"] : multipleChoiceLabels;
   const rawOptions = Array.isArray(data.options) ? data.options : [];
