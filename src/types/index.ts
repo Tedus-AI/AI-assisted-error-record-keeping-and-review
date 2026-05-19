@@ -30,6 +30,7 @@ export interface Question {
   id: string;
   childId: string;
   subject: string;
+  examScope?: string;
   questionType: QuestionType;
   answerType: AnswerType;
   originalImageUrl?: string;
@@ -75,6 +76,7 @@ export interface ReviewSession {
   id: string;
   childId: string;
   subject?: string;
+  examScope?: string;
   questionType?: QuestionType;
   questionCount: number;
   correctCount: number;
@@ -106,6 +108,7 @@ export interface ParentSecurityProfile {
 export interface PracticeConfig {
   childId: string;
   subject?: string;
+  examScope?: string;
   questionType?: QuestionType;
   questionCount: number;
   prioritizeWrong: boolean;
@@ -157,6 +160,7 @@ export interface PendingAIReview {
   imageUrl?: string;
   croppedImageUrl?: string;
   cropMeta?: CropMeta;
+  examScope?: string;
   debug?: AIDebugSnapshot;
   result: {
     subject: string;

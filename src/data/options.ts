@@ -20,6 +20,34 @@ export const gradeOptions = [
   "國中一年級",
 ];
 
+const elementaryGradeNumbers: Record<string, string> = {
+  "小學一年級": "1",
+  "小學二年級": "2",
+  "小學三年級": "3",
+  "小學四年級": "4",
+  "小學五年級": "5",
+  "小學六年級": "6",
+};
+
+const juniorHighGradeLabels: Record<string, string> = {
+  "國中一年級": "國一",
+};
+
+export function gradeExamLabel(grade?: string) {
+  if (!grade) return "3";
+  return elementaryGradeNumbers[grade] ?? juniorHighGradeLabels[grade] ?? "3";
+}
+
+export function examScopeOptionsForGrade(grade?: string) {
+  const label = gradeExamLabel(grade);
+  return [
+    `${label}上第一次段考`,
+    `${label}上第二次段考`,
+    `${label}下第一次段考`,
+    `${label}下第二次段考`,
+  ];
+}
+
 export function answerTypeForQuestionType(questionType: QuestionType): AnswerType {
   return questionType === "是非題" ? "true_false" : "multiple_choice";
 }

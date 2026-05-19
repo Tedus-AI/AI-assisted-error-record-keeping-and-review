@@ -121,6 +121,8 @@ export function PracticePage() {
   }, [questions, session]);
 
   const currentQuestion = sessionQuestions[index];
+  const questionImageUrl =
+    currentQuestion?.croppedImageUrl ?? currentQuestion?.originalImageUrl;
   const answerOptions = currentQuestion
     ? optionsForAnswerType(currentQuestion.answerType, currentQuestion.options)
     : [];
@@ -185,7 +187,9 @@ export function PracticePage() {
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-bold text-slate-500">
-            {currentQuestion.subject} | {currentQuestion.questionType}
+            {currentQuestion.subject}
+            {currentQuestion.examScope ? ` | ${currentQuestion.examScope}` : ""} |{" "}
+            {currentQuestion.questionType}
           </p>
           <h1 className="crayon-title text-4xl sm:text-5xl">
             第 <span className="text-crayon-blue">{index + 1}</span> /{" "}
@@ -210,9 +214,9 @@ export function PracticePage() {
 
       {!result ? (
         <HandCard className="p-5 sm:p-7" tone="orange" tape>
-          {currentQuestion.originalImageUrl && (
+          {questionImageUrl && (
             <img
-              src={currentQuestion.originalImageUrl}
+              src={questionImageUrl}
               alt="題目圖片"
               className="mb-5 max-h-56 rounded-[18px] border-2 border-slate-300 object-contain"
             />
@@ -301,7 +305,7 @@ export function PracticePage() {
             </p>
           </HandCard>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <HandCard className="p-4 text-center" tone="purple">
               <Clock className="mx-auto mb-2 text-crayon-purple" />
               <p className="text-sm font-bold text-slate-500">作答時間</p>
@@ -313,11 +317,6 @@ export function PracticePage() {
               <p className="crayon-title text-3xl">
                 {index + (result.isCorrect ? 1 : 0)} 題
               </p>
-            </HandCard>
-            <HandCard className="p-4 text-center" tone="blue">
-              <ShieldCheck className="mx-auto mb-2 text-crayon-blue" />
-              <p className="text-sm font-bold text-slate-500">AI 呼叫</p>
-              <p className="crayon-title text-3xl">0 次</p>
             </HandCard>
           </div>
 

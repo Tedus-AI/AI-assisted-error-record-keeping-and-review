@@ -21,6 +21,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import {
   answerTypeForQuestionType,
+  examScopeOptionsForGrade,
   questionTypeOptions,
   subjectOptions,
 } from "../data/options";
@@ -43,8 +44,15 @@ function EditQuestionPanel({
   question: Question;
   onClose: () => void;
 }) {
-  const { updateQuestion } = useAppData();
+  const { selectedChild, updateQuestion } = useAppData();
   const [subject, setSubject] = useState(question.subject);
+  const examScopeOptions = useMemo(
+    () => examScopeOptionsForGrade(selectedChild?.grade),
+    [selectedChild?.grade]
+  );
+  const [examScope, setExamScope] = useState(
+    question.examScope ?? examScopeOptions[0]
+  );
   const [questionType, setQuestionType] = useState<QuestionType>(question.questionType);
   const answerType = answerTypeForQuestionType(questionType);
   const [convertedQuestion, setConvertedQuestion] = useState(question.convertedQuestion);
@@ -71,6 +79,7 @@ function EditQuestionPanel({
     const normalizedAnswer = normalizeAnswerForType(correctAnswer, answerType);
     await updateQuestion(question.id, {
       subject,
+      examScope,
       questionType,
       convertedQuestion,
       answerType,
@@ -80,7 +89,7 @@ function EditQuestionPanel({
       explanation,
       isUserConfirmed: true,
       reviewStatus: "approved",
-      tags: [subject, questionType],
+      tags: [subject, questionType, examScope],
     });
     onClose();
   };
@@ -98,7 +107,7 @@ function EditQuestionPanel({
               <X className="m-auto" />
             </button>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <label>
               <span className="mb-2 block font-bold">科目</span>
               <select
@@ -108,6 +117,20 @@ function EditQuestionPanel({
               >
                 {subjectOptions.map((item) => (
                   <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-2 block font-bold">題目範圍</span>
+              <select
+                className="sketch-input"
+                value={examScope}
+                onChange={(event) => setExamScope(event.target.value)}
+              >
+                {examScopeOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
             </label>
@@ -189,6 +212,7 @@ export function QuestionBankPage() {
   } = useAppData();
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const [examScopeFilter, setExamScopeFilter] = useState("all");
   const [questionTypeFilter, setQuestionTypeFilter] = useState<"all" | QuestionType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | QuestionStatus>("all");
   const [masteryFilter, setMasteryFilter] = useState("all");
@@ -197,11 +221,13 @@ export function QuestionBankPage() {
   const childQuestions = questions.filter(
     (question) => question.childId === selectedChild?.id
   );
+  const examScopeOptions = examScopeOptionsForGrade(selectedChild?.grade);
   const filtered = useMemo(() => {
     return childQuestions.filter((question) => {
-      const haystack = `${question.convertedQuestion} ${question.subject} ${question.questionType}`;
+      const haystack = `${question.convertedQuestion} ${question.subject} ${question.examScope ?? ""} ${question.questionType}`;
       if (search && !haystack.toLowerCase().includes(search.toLowerCase())) return false;
       if (subjectFilter !== "all" && question.subject !== subjectFilter) return false;
+      if (examScopeFilter !== "all" && question.examScope !== examScopeFilter) return false;
       if (questionTypeFilter !== "all" && question.questionType !== questionTypeFilter) {
         return false;
       }
@@ -210,7 +236,15 @@ export function QuestionBankPage() {
       if (masteryFilter === "mastered" && question.masteryLevel < 5) return false;
       return true;
     });
-  }, [childQuestions, masteryFilter, questionTypeFilter, search, statusFilter, subjectFilter]);
+  }, [
+    childQuestions,
+    examScopeFilter,
+    masteryFilter,
+    questionTypeFilter,
+    search,
+    statusFilter,
+    subjectFilter,
+  ]);
 
   const counts = {
     total: childQuestions.length,
@@ -252,7 +286,7 @@ export function QuestionBankPage() {
       />
 
       <HandCard className="mb-5 p-4" tone="blue">
-        <div className="grid gap-3 lg:grid-cols-[1.3fr_repeat(4,1fr)]">
+        <div className="grid gap-3 lg:grid-cols-[1.3fr_repeat(5,1fr)]">
           <label className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -283,6 +317,18 @@ export function QuestionBankPage() {
           >
             <option value="all">題型：全部</option>
             {questionTypeOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <select
+            className="sketch-input"
+            value={examScopeFilter}
+            onChange={(event) => setExamScopeFilter(event.target.value)}
+          >
+            <option value="all">範圍：全部</option>
+            {examScopeOptions.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -335,11 +381,12 @@ export function QuestionBankPage() {
       ) : (
         <HandCard className="overflow-hidden p-0" tone="blue">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-left">
+            <table className="w-full min-w-[1080px] border-collapse text-left">
               <thead className="bg-blue-50 text-sm font-bold text-crayon-blue">
                 <tr>
                   <th className="p-4">題目</th>
                   <th className="p-4">科目</th>
+                  <th className="p-4">範圍</th>
                   <th className="p-4">題型</th>
                   <th className="p-4">狀態</th>
                   <th className="p-4">熟練度</th>
@@ -360,6 +407,9 @@ export function QuestionBankPage() {
                       <span className="rounded-full border-2 border-crayon-blue bg-blue-50 px-3 py-1 font-bold text-crayon-blue">
                         {question.subject}
                       </span>
+                    </td>
+                    <td className="p-4 font-semibold text-slate-700">
+                      {question.examScope ?? "未設定"}
                     </td>
                     <td className="p-4 font-semibold text-slate-700">{question.questionType}</td>
                     <td className="p-4">

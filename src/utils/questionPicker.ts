@@ -19,6 +19,7 @@ export function pickQuestions(questions: Question[], config: PracticeConfig) {
     if (question.reviewStatus !== "approved") return false;
     if (question.childId !== config.childId) return false;
     if (config.subject && question.subject !== config.subject) return false;
+    if (config.examScope && question.examScope !== config.examScope) return false;
     if (config.questionType && question.questionType !== config.questionType) return false;
     if (config.excludeMastered && question.masteryLevel >= 5) return false;
     return true;

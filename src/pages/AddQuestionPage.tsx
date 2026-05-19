@@ -23,15 +23,13 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import {
   answerTypeForQuestionType,
+  examScopeOptionsForGrade,
   questionTypeOptions,
   subjectOptions,
 } from "../data/options";
 import { analyzeQuestion, getAIQuestionDebug } from "../services/aiService";
 import { hasGoogleAISettings } from "../services/aiSettings";
-import {
-  fileToCompressedDataUrl,
-  fileToCroppedDataUrl,
-} from "../services/storageService";
+import { fileToCroppedDataUrl } from "../services/storageService";
 import { useAppData } from "../hooks/useAppData";
 import type {
   AIDebugSnapshot,
@@ -54,6 +52,11 @@ export function AddQuestionPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"manual" | "ai">("ai");
   const [subject, setSubject] = useState(subjectOptions[1]);
+  const examScopeOptions = useMemo(
+    () => examScopeOptionsForGrade(selectedChild?.grade),
+    [selectedChild?.grade]
+  );
+  const [examScope, setExamScope] = useState(examScopeOptions[0]);
   const [questionType, setQuestionType] = useState<QuestionType>("選擇題");
   const answerType = answerTypeForQuestionType(questionType);
   const [convertedQuestion, setConvertedQuestion] = useState("");
@@ -88,6 +91,12 @@ export function AddQuestionPage() {
     setOptions((current) => optionsForAnswerType(nextAnswerType, current));
     setCorrectAnswer((current) => normalizeAnswerForType(current, nextAnswerType));
   };
+
+  useEffect(() => {
+    setExamScope((current) =>
+      examScopeOptions.includes(current) ? current : examScopeOptions[0]
+    );
+  }, [examScopeOptions]);
 
   const handleFile = async (file?: File) => {
     if (!file) return;
@@ -145,6 +154,7 @@ export function AddQuestionPage() {
       await addQuestion({
         childId: selectedChild.id,
         subject,
+        examScope,
         questionType,
         answerType,
         convertedQuestion: convertedQuestion.trim(),
@@ -162,7 +172,7 @@ export function AddQuestionPage() {
         totalAttemptCount: 0,
         masteryLevel: 0,
         lastReviewedAt: null,
-        tags: [subject, questionType],
+        tags: [subject, questionType, examScope],
       });
       setMessage("題目已儲存到題庫。");
       setConvertedQuestion("");
@@ -200,13 +210,10 @@ export function AddQuestionPage() {
 
     setIsSaving(true);
     try {
-      const originalImageDataUrl = imageFile
-        ? await fileToCompressedDataUrl(imageFile)
-        : undefined;
       const croppedImageDataUrl = imageFile
-        ? await fileToCroppedDataUrl(imageFile, crop)
+        ? await fileToCroppedDataUrl(imageFile, crop, 1280, 0.86)
         : undefined;
-      const imageDataUrl = croppedImageDataUrl ?? originalImageDataUrl;
+      const imageDataUrl = croppedImageDataUrl;
       setUploadProgress(imageDataUrl ? 100 : 0);
       const result = await analyzeQuestion({
         subject,
@@ -219,9 +226,9 @@ export function AddQuestionPage() {
       const { debug, ...reviewResult } = result;
       setDebugSnapshot(debug ?? null);
       savePendingAIReview({
-        imageUrl: originalImageDataUrl,
         croppedImageUrl: croppedImageDataUrl,
         cropMeta: crop,
+        examScope,
         debug,
         result: reviewResult,
       });
@@ -237,7 +244,7 @@ export function AddQuestionPage() {
   };
 
   const commonSelectors = (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-3">
       <label>
         <span className="mb-2 block font-bold">科目</span>
         <select
@@ -247,6 +254,20 @@ export function AddQuestionPage() {
         >
           {subjectOptions.map((item) => (
             <option key={item}>{item}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span className="mb-2 block font-bold">題目範圍</span>
+        <select
+          className="sketch-input"
+          value={examScope}
+          onChange={(event) => setExamScope(event.target.value)}
+        >
+          {examScopeOptions.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
           ))}
         </select>
       </label>
@@ -436,6 +457,7 @@ export function AddQuestionPage() {
             <div className="space-y-3">
               {[
                 ["科目", subject],
+                ["範圍", examScope],
                 ["題型", questionType],
                 ["答案形式", answerType === "true_false" ? "對 / 錯" : "A-D 選擇題"],
               ].map(([title, body]) => (

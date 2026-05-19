@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Play, ShieldCheck, Target } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { HandCard } from "../components/HandCard";
 import { PageHeader } from "../components/PageHeader";
-import { questionTypeOptions } from "../data/options";
+import { examScopeOptionsForGrade, questionTypeOptions } from "../data/options";
 import { useAppData } from "../hooks/useAppData";
 import type { PracticeConfig, QuestionType } from "../types";
 import { pickQuestions } from "../utils/questionPicker";
@@ -17,7 +17,12 @@ export function PracticeSetupPage() {
       question.childId === selectedChild?.id && question.reviewStatus === "approved"
   );
   const subjects = Array.from(new Set(approved.map((question) => question.subject)));
+  const examScopeOptions = useMemo(
+    () => examScopeOptionsForGrade(selectedChild?.grade),
+    [selectedChild?.grade]
+  );
   const [subject, setSubject] = useState("");
+  const [examScope, setExamScope] = useState("");
   const [questionType, setQuestionType] = useState<"" | QuestionType>("");
   const [questionCount, setQuestionCount] = useState(10);
   const [prioritizeWrong, setPrioritizeWrong] = useState(true);
@@ -28,6 +33,7 @@ export function PracticeSetupPage() {
     ? {
         childId: selectedChild.id,
         subject: subject || undefined,
+        examScope: examScope || undefined,
         questionType: questionType || undefined,
         questionCount,
         prioritizeWrong,
@@ -39,6 +45,12 @@ export function PracticeSetupPage() {
     () => (config ? pickQuestions(questions, config) : []),
     [config, questions]
   );
+
+  useEffect(() => {
+    setExamScope((current) =>
+      !current || examScopeOptions.includes(current) ? current : ""
+    );
+  }, [examScopeOptions]);
 
   const lowMasteryCount = picked.filter((question) => question.masteryLevel <= 2).length;
   const highRiskCount = picked.filter((question) => question.wrongCount >= 2).length;
@@ -82,7 +94,7 @@ export function PracticeSetupPage() {
 
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
         <HandCard className="p-5" tone="orange" tape>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <label>
               <span className="mb-2 block font-bold">科目</span>
               <select
@@ -92,6 +104,21 @@ export function PracticeSetupPage() {
               >
                 <option value="">全部科目</option>
                 {subjects.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-2 block font-bold">題目範圍</span>
+              <select
+                className="sketch-input"
+                value={examScope}
+                onChange={(event) => setExamScope(event.target.value)}
+              >
+                <option value="">全部範圍</option>
+                {examScopeOptions.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
@@ -198,6 +225,12 @@ export function PracticeSetupPage() {
               <span className="font-bold">本次題目</span>
               <span className="crayon-title text-3xl text-crayon-blue">
                 {picked.length} 題
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-[16px] border-2 border-slate-300 bg-white/60 p-3">
+              <span className="font-bold">題目範圍</span>
+              <span className="font-bold text-crayon-blue">
+                {examScope || "全部"}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import {
   answerTypeForQuestionType,
+  examScopeOptionsForGrade,
   questionTypeOptions,
   subjectOptions,
 } from "../data/options";
@@ -37,6 +38,11 @@ export function ReviewAIResultPage() {
   const navigate = useNavigate();
   const [pending, setPending] = useState<PendingAIReview | null>(null);
   const [subject, setSubject] = useState(subjectOptions[1]);
+  const examScopeOptions = useMemo(
+    () => examScopeOptionsForGrade(selectedChild?.grade),
+    [selectedChild?.grade]
+  );
+  const [examScope, setExamScope] = useState(examScopeOptions[0]);
   const [questionType, setQuestionType] = useState<QuestionType>("選擇題");
   const answerType = answerTypeForQuestionType(questionType);
   const [originalQuestionText, setOriginalQuestionText] = useState("");
@@ -47,12 +53,14 @@ export function ReviewAIResultPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [keepCroppedImage, setKeepCroppedImage] = useState(false);
 
   useEffect(() => {
     const review = getPendingAIReview();
     setPending(review);
     if (!review) return;
     setSubject(review.result.subject);
+    setExamScope(review.examScope ?? examScopeOptions[0]);
     setQuestionType(review.result.questionType);
     setOriginalQuestionText(review.result.originalQuestionText);
     setConvertedQuestion(review.result.convertedQuestion);
@@ -61,7 +69,7 @@ export function ReviewAIResultPage() {
       normalizeAnswerForType(review.result.correctAnswer, review.result.answerType)
     );
     setExplanation(review.result.explanation);
-  }, [getPendingAIReview]);
+  }, [examScopeOptions, getPendingAIReview]);
 
   const handleQuestionTypeChange = (nextQuestionType: QuestionType) => {
     const nextAnswerType = answerTypeForQuestionType(nextQuestionType);
@@ -72,12 +80,7 @@ export function ReviewAIResultPage() {
 
   const save = async (status: "approved" | "needs_manual_edit") => {
     if (!selectedChild || !pending) return;
-    const persistedOriginalImageUrl =
-      pending.imageUrl && !pending.imageUrl.startsWith("data:") ? pending.imageUrl : undefined;
-    const persistedCroppedImageUrl =
-      pending.croppedImageUrl && !pending.croppedImageUrl.startsWith("data:")
-        ? pending.croppedImageUrl
-        : undefined;
+    const keptCroppedImageUrl = keepCroppedImage ? pending.croppedImageUrl : undefined;
     const aiModel = user?.isDemo ? "mock_gemma_free" : getGoogleAISettings().modelId;
     const normalizedOptions = optionsForAnswerType(answerType, options);
     const normalizedAnswer = normalizeAnswerForType(correctAnswer, answerType);
@@ -89,11 +92,11 @@ export function ReviewAIResultPage() {
       await addQuestion({
         childId: selectedChild.id,
         subject,
+        examScope,
         questionType,
         answerType,
-        originalImageUrl: persistedOriginalImageUrl,
-        croppedImageUrl: persistedCroppedImageUrl ?? persistedOriginalImageUrl,
-        cropMeta: pending.cropMeta,
+        croppedImageUrl: keptCroppedImageUrl,
+        cropMeta: keptCroppedImageUrl ? pending.cropMeta : undefined,
         originalQuestionText,
         convertedQuestion,
         options: normalizedOptions,
@@ -113,7 +116,7 @@ export function ReviewAIResultPage() {
         totalAttemptCount: 0,
         masteryLevel: 0,
         lastReviewedAt: null,
-        tags: [subject, questionType],
+        tags: [subject, questionType, examScope],
       });
       clearPendingAIReview();
       navigate("/question-bank");
@@ -222,7 +225,7 @@ export function ReviewAIResultPage() {
             AI 解析結果
           </h2>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <label>
               <span className="mb-2 block font-bold">科目</span>
               <select
@@ -232,6 +235,20 @@ export function ReviewAIResultPage() {
               >
                 {subjectOptions.map((item) => (
                   <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-2 block font-bold">題目範圍</span>
+              <select
+                className="sketch-input"
+                value={examScope}
+                onChange={(event) => setExamScope(event.target.value)}
+              >
+                {examScopeOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
             </label>
@@ -299,6 +316,24 @@ export function ReviewAIResultPage() {
               className="sketch-input min-h-[150px]"
               value={explanation}
               onChange={(event) => setExplanation(event.target.value)}
+            />
+          </label>
+
+          <label className="mt-4 flex items-start justify-between gap-4 rounded-[18px] border-2 border-crayon-purple bg-purple-50/70 p-4">
+            <span>
+              <span className="block font-bold text-crayon-purple">
+                保留裁切照片到題庫
+              </span>
+              <span className="mt-1 block text-sm font-semibold text-slate-600">
+                有小圖示或題目排版需要看原圖時再勾選；未勾選就不會把 base64 圖片寫進題目資料。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-1 h-8 w-8 shrink-0 accent-crayon-purple"
+              checked={keepCroppedImage}
+              disabled={!pending.croppedImageUrl}
+              onChange={(event) => setKeepCroppedImage(event.target.checked)}
             />
           </label>
 
