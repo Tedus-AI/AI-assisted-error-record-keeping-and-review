@@ -34,6 +34,12 @@ function stringifyValue(value: unknown) {
   }
 }
 
+function answerTypeLabel(answerType: AIDebugSnapshot["answerType"]) {
+  if (answerType === "true_false") return "對 / 錯";
+  if (answerType === "comparison") return "> / < / =";
+  return "A-D 選擇題";
+}
+
 function DebugBlock({
   title,
   value,
@@ -102,7 +108,7 @@ export function AIDebugPanel({ debug }: AIDebugPanelProps) {
           ["科目題型", `${debug.subject} / ${debug.questionType}`],
           ["送出圖片", imageText],
           ["HTTP", debug.httpStatus ? String(debug.httpStatus) : "尚未回應"],
-          ["答案形式", debug.answerType === "true_false" ? "對 / 錯" : "A-D 選擇題"],
+          ["答案形式", answerTypeLabel(debug.answerType)],
         ].map(([title, body]) => (
           <div
             key={title}

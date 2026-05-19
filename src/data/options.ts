@@ -7,6 +7,7 @@ export const questionTypeOptions: QuestionType[] = [
   "選擇題",
   "改錯字",
   "應用題",
+  "比大小",
 ];
 
 export const gradeOptions = [
@@ -49,6 +50,7 @@ export function examScopeOptionsForGrade(grade?: string) {
 }
 
 export function answerTypeForQuestionType(questionType: QuestionType): AnswerType {
+  if (questionType === "比大小") return "comparison";
   return questionType === "是非題" ? "true_false" : "multiple_choice";
 }
 

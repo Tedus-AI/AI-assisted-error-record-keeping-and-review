@@ -40,6 +40,11 @@ const trueFalseOptions: QuestionOption[] = [
   { label: "A", text: "對" },
   { label: "B", text: "錯" },
 ];
+const comparisonOptions: QuestionOption[] = [
+  { label: "A", text: ">" },
+  { label: "B", text: "<" },
+  { label: "C", text: "=" },
+];
 
 export class AIQuestionDebugError extends Error {
   debug: AIDebugSnapshot;
@@ -106,6 +111,8 @@ function createMockResult(input: AnalyzeQuestionInput): Partial<AIQuestionAnalys
     input.text?.trim() ||
     (input.questionType === "是非題"
       ? "下列動物中，狗是昆蟲。"
+      : input.questionType === "比大小"
+        ? "15 - 2.5 □ 10 + 0.6"
       : input.questionType === "改錯字"
         ? "請圈出錯字：小明把作業寫得很工正。"
         : "小明有 24 顆糖，先吃掉 1/3，剩下的再分給 2 個朋友，每人可分到幾顆？");
@@ -134,6 +141,17 @@ function createMockResult(input: AnalyzeQuestionInput): Partial<AIQuestionAnalys
       correctAnswer: "B",
       explanation: "形容字寫得整齊應該用「工整」，不是「工正」。",
       confidence: input.imageUrl ? 0.84 : 0.78,
+    };
+  }
+
+  if (input.questionType === "比大小") {
+    return {
+      originalQuestionText,
+      convertedQuestion: originalQuestionText,
+      options: comparisonOptions,
+      correctAnswer: "A",
+      explanation: "15 - 2.5 = 12.5，10 + 0.6 = 10.6，12.5 比 10.6 大，所以要填 >。",
+      confidence: input.imageUrl ? 0.86 : 0.78,
     };
   }
 
@@ -242,6 +260,32 @@ JSON 格式：
     {"label": "B", "text": ""},
     {"label": "C", "text": ""},
     {"label": "D", "text": ""}
+  ],
+  "correctAnswer": "A",
+  "explanation": "",
+  "confidence": 0.0
+}${extraText}`;
+  }
+
+  if (input.questionType === "比大小") {
+    return `${sharedHeader}
+
+任務：
+1. 完整抄寫圖片中的比大小題目，不要換題。
+2. 題目通常會長得像「15 - 2.5 □ 10 + 0.6」或中間有口、□、括號、空格，代表要填入 >、< 或 =。
+3. convertedQuestion 請保留原題，可以把中間空格統一成「□」。
+4. options 固定只回三個：A = >、B = <、C = =。
+5. 請分別計算或判斷左右兩邊大小，correctAnswer 只能是 A、B、C。
+6. explanation 要用小學生能懂的方式寫出左右兩邊各是多少，最後說明應填哪個符號。
+
+JSON 格式：
+{
+  "originalQuestionText": "",
+  "convertedQuestion": "",
+  "options": [
+    {"label": "A", "text": ">"},
+    {"label": "B", "text": "<"},
+    {"label": "C", "text": "="}
   ],
   "correctAnswer": "A",
   "explanation": "",
@@ -687,17 +731,28 @@ function normalizeAIResult(
 ): AIQuestionAnalysisResult {
   const data = unwrapAIJsonCandidate(value) as Partial<AIQuestionAnalysisResult>;
   const answerType = answerTypeForQuestionType(input.questionType);
-  const labels = answerType === "true_false" ? ["A", "B"] : multipleChoiceLabels;
+  const labels =
+    answerType === "true_false"
+      ? ["A", "B"]
+      : answerType === "comparison"
+        ? ["A", "B", "C"]
+        : multipleChoiceLabels;
   const rawOptions = Array.isArray(data.options) ? data.options : [];
   const options =
     answerType === "true_false"
       ? trueFalseOptions
-      : labels.map((label, index) => ({
-          label,
-          text: String(rawOptions.find((option) => option?.label === label)?.text ?? rawOptions[index]?.text ?? ""),
-        }));
+      : answerType === "comparison"
+        ? comparisonOptions
+        : labels.map((label, index) => ({
+            label,
+            text: String(rawOptions.find((option) => option?.label === label)?.text ?? rawOptions[index]?.text ?? ""),
+          }));
 
-  const correctAnswer = String(data.correctAnswer ?? "A").trim().toUpperCase();
+  const rawCorrectAnswer = String(data.correctAnswer ?? "A").trim().toUpperCase();
+  const correctAnswer =
+    answerType === "comparison"
+      ? ({ ">": "A", "<": "B", "=": "C" }[rawCorrectAnswer] ?? rawCorrectAnswer)
+      : rawCorrectAnswer;
   const confidence = Number(data.confidence);
   const originalQuestionText = String(data.originalQuestionText ?? "").trim();
   const convertedQuestion = String(

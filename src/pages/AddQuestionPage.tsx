@@ -40,6 +40,12 @@ import type {
 
 const initialCrop: CropMeta = { x: 12, y: 20, width: 72, height: 34 };
 
+function answerTypeLabel(answerType: string) {
+  if (answerType === "true_false") return "對 / 錯";
+  if (answerType === "comparison") return "> / < / =";
+  return "A-D 選擇題";
+}
+
 export function AddQuestionPage() {
   const {
     user,
@@ -459,7 +465,7 @@ export function AddQuestionPage() {
                 ["科目", subject],
                 ["範圍", examScope],
                 ["題型", questionType],
-                ["答案形式", answerType === "true_false" ? "對 / 錯" : "A-D 選擇題"],
+                ["答案形式", answerTypeLabel(answerType)],
               ].map(([title, body]) => (
                 <div
                   key={title}
