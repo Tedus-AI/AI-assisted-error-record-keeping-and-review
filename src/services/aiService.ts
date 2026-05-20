@@ -107,15 +107,17 @@ export function getAIUsage() {
 }
 
 function createMockResult(input: AnalyzeQuestionInput): Partial<AIQuestionAnalysisResult> {
-  const originalQuestionText =
-    input.text?.trim() ||
-    (input.questionType === "是非題"
+  const fallbackQuestionText =
+    input.questionType === "是非題"
       ? "下列動物中，狗是昆蟲。"
       : input.questionType === "比大小"
         ? "15 - 2.5 □ 10 + 0.6"
-      : input.questionType === "改錯字"
-        ? "請圈出錯字：小明把作業寫得很工正。"
-        : "小明有 24 顆糖，先吃掉 1/3，剩下的再分給 2 個朋友，每人可分到幾顆？");
+        : input.questionType === "計算題"
+          ? "364 + 289 = ?"
+          : input.questionType === "改錯字"
+            ? "請圈出錯字：小明把作業寫得很工正。"
+            : "小明有 24 顆糖，先吃掉 1/3，剩下的再分給 2 個朋友，每人可分到幾顆？";
+  const originalQuestionText = input.text?.trim() || fallbackQuestionText;
 
   if (input.questionType === "是非題") {
     return {
@@ -141,6 +143,22 @@ function createMockResult(input: AnalyzeQuestionInput): Partial<AIQuestionAnalys
       correctAnswer: "B",
       explanation: "形容字寫得整齊應該用「工整」，不是「工正」。",
       confidence: input.imageUrl ? 0.84 : 0.78,
+    };
+  }
+
+  if (input.questionType === "計算題") {
+    return {
+      originalQuestionText,
+      convertedQuestion: originalQuestionText,
+      options: [
+        { label: "A", text: "643" },
+        { label: "B", text: "653" },
+        { label: "C", text: "663" },
+        { label: "D", text: "753" },
+      ],
+      correctAnswer: "B",
+      explanation: "4 + 9 = 13，寫 3 進 1；6 + 8 + 1 = 15，寫 5 進 1；3 + 2 + 1 = 6，所以 364 + 289 = 653。",
+      confidence: input.imageUrl ? 0.86 : 0.78,
     };
   }
 
@@ -250,6 +268,34 @@ JSON 格式：
 5. options 提供 4 個選項，只有 1 個正確答案。
 6. 干擾選項要合理，但不能太離譜。
 7. explanation 說明錯在哪裡、正確字是什麼、為什麼。
+
+JSON 格式：
+{
+  "originalQuestionText": "",
+  "convertedQuestion": "",
+  "options": [
+    {"label": "A", "text": ""},
+    {"label": "B", "text": ""},
+    {"label": "C", "text": ""},
+    {"label": "D", "text": ""}
+  ],
+  "correctAnswer": "A",
+  "explanation": "",
+  "confidence": 0.0
+}${extraText}`;
+  }
+
+  if (input.questionType === "計算題") {
+    return `${sharedHeader}
+
+任務：
+1. 完整抄寫圖片中的計算題，不要換題。
+2. 這是直接計算題，可能是橫式、直式、整數、小數、分數或含單位換算的算式；請依題目內容計算。
+3. convertedQuestion 請保留原算式，或整理成清楚的「算式 = ?」。
+4. 若原題已有選項，優先保留原選項並轉成 A/B/C/D。
+5. 若原題沒有選項，請產生 4 個合理選項，其中只有 1 個正確答案。
+6. correctAnswer 只能是 A、B、C、D。
+7. explanation 要列出主要計算步驟，適合小學生理解。
 
 JSON 格式：
 {

@@ -8,6 +8,7 @@ export const questionTypeOptions: QuestionType[] = [
   "改錯字",
   "應用題",
   "比大小",
+  "計算題",
 ];
 
 export const gradeOptions = [

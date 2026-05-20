@@ -7,7 +7,13 @@ export type QuestionStatus =
 
 export type AnswerType = "multiple_choice" | "true_false" | "comparison";
 
-export type QuestionType = "是非題" | "選擇題" | "改錯字" | "應用題" | "比大小";
+export type QuestionType =
+  | "是非題"
+  | "選擇題"
+  | "改錯字"
+  | "應用題"
+  | "比大小"
+  | "計算題";
 
 export type SourceType = "manual" | "photo" | "ai";
 
