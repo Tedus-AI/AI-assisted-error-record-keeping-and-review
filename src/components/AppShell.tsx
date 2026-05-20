@@ -15,6 +15,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { FullscreenButton } from "./FullscreenButton";
 import { Logo } from "./Logo";
 import { useAppData } from "../hooks/useAppData";
 
@@ -178,6 +179,7 @@ export function AppShell() {
                 <Bot size={18} />
                 今日 AI 解析 {aiUsage.dailyAiCallCount}/{user?.isDemo ? 10 : 1500}
               </div>
+              <FullscreenButton />
               <button
                 className={`hidden items-center gap-2 rounded-[18px] border-2 bg-white px-3 py-2 text-sm font-bold sm:flex ${
                   parentAccessAllowed

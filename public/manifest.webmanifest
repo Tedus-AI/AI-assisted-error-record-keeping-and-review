@@ -2,14 +2,15 @@
   "name": "AI 錯題寶",
   "short_name": "錯題寶",
   "description": "AI 輔助建檔，離線邏輯複習的錯題題庫。",
-  "start_url": "/",
+  "start_url": "/AI-assisted-error-record-keeping-and-review/",
+  "scope": "/AI-assisted-error-record-keeping-and-review/",
   "display": "standalone",
   "background_color": "#f8f0dd",
   "theme_color": "#145bd7",
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
