@@ -1,9 +1,26 @@
+const CACHE_NAME = "ai-mistake-review-v2";
+const PRECACHE_URLS = ["./", "./manifest.webmanifest", "./icon.svg"];
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("ai-mistake-review-v1").then((cache) =>
-      cache.addAll(["/", "/manifest.webmanifest", "/icon.svg"])
-    )
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith("ai-mistake-review-") && key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
+      )
+  );
+  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {

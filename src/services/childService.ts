@@ -1,12 +1,13 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
   orderBy,
   query,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "./firebase";
 import { getLocalState, setLocalState } from "./localStore";
@@ -76,7 +77,25 @@ export async function updateChild(
 
 export async function deleteChild(userId: string, childId: string): Promise<void> {
   if (isFirebaseConfigured && db && userId !== "demo_user") {
-    await deleteDoc(doc(db, "users", userId, "children", childId));
+    const [questionSnapshot, attemptSnapshot] = await Promise.all([
+      getDocs(
+        query(collection(db, "users", userId, "questions"), where("childId", "==", childId))
+      ),
+      getDocs(
+        query(collection(db, "users", userId, "attempts"), where("childId", "==", childId))
+      ),
+    ]);
+    const refs = [
+      doc(db, "users", userId, "children", childId),
+      ...questionSnapshot.docs.map((item) => item.ref),
+      ...attemptSnapshot.docs.map((item) => item.ref),
+    ];
+
+    for (let index = 0; index < refs.length; index += 450) {
+      const batch = writeBatch(db);
+      refs.slice(index, index + 450).forEach((item) => batch.delete(item));
+      await batch.commit();
+    }
     return;
   }
 

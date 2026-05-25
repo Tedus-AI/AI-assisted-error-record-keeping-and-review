@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -98,7 +97,22 @@ export async function archiveQuestion(userId: string, questionId: string) {
 
 export async function deleteQuestion(userId: string, questionId: string): Promise<void> {
   if (isFirebaseConfigured && db && userId !== "demo_user") {
-    await deleteDoc(doc(db, "users", userId, "questions", questionId));
+    const attemptsSnapshot = await getDocs(
+      query(
+        collection(db, "users", userId, "attempts"),
+        where("questionId", "==", questionId)
+      )
+    );
+    const refs = [
+      doc(db, "users", userId, "questions", questionId),
+      ...attemptsSnapshot.docs.map((item) => item.ref),
+    ];
+
+    for (let index = 0; index < refs.length; index += 450) {
+      const batch = writeBatch(db);
+      refs.slice(index, index + 450).forEach((item) => batch.delete(item));
+      await batch.commit();
+    }
     return;
   }
 

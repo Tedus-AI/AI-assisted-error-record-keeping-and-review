@@ -27,6 +27,13 @@ import { useAppData } from "../hooks/useAppData";
 import { getGoogleAISettings } from "../services/aiSettings";
 import type { PendingAIReview, QuestionOption, QuestionType } from "../types";
 
+const MAX_STORED_CROPPED_IMAGE_BYTES = 650_000;
+
+function estimateDataUrlBytes(dataUrl: string) {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  return Math.round((base64.length * 3) / 4);
+}
+
 export function ReviewAIResultPage() {
   const {
     user,
@@ -81,6 +88,16 @@ export function ReviewAIResultPage() {
   const save = async (status: "approved" | "needs_manual_edit") => {
     if (!selectedChild || !pending) return;
     const keptCroppedImageUrl = keepCroppedImage ? pending.croppedImageUrl : undefined;
+    if (
+      keptCroppedImageUrl?.startsWith("data:") &&
+      estimateDataUrlBytes(keptCroppedImageUrl) > MAX_STORED_CROPPED_IMAGE_BYTES
+    ) {
+      setMessage("");
+      setError(
+        "裁切照片太大，為了避免資料庫爆掉，請取消「保留裁切照片」後儲存，或回上一頁重新裁小一點。"
+      );
+      return;
+    }
     const aiModel = user?.isDemo ? "mock_gemma_free" : getGoogleAISettings().modelId;
     const normalizedOptions = optionsForAnswerType(answerType, options);
     const normalizedAnswer = normalizeAnswerForType(correctAnswer, answerType);

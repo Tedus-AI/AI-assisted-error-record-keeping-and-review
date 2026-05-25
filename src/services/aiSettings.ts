@@ -40,7 +40,11 @@ const SETTINGS_KEY = "ai-mistake-review-google-ai-settings-v1";
 const USAGE_KEY = "ai-mistake-review-google-ai-usage-v1";
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function createEmptyUsage(): GoogleAIUsageStore {

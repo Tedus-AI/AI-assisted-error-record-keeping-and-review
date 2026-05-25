@@ -83,6 +83,7 @@ function parentUnlockKey(userId: string) {
 interface AppDataValue {
   user: AppUser | null;
   isLoading: boolean;
+  loadError: string;
   children: Child[];
   questions: Question[];
   attempts: Attempt[];
@@ -126,6 +127,7 @@ export const AppDataContext = createContext<AppDataValue | null>(null);
 export function AppDataProvider({ children: appChildren }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [children, setChildren] = useState<Child[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
@@ -153,40 +155,53 @@ export function AppDataProvider({ children: appChildren }: { children: ReactNode
       setParentSecurityProfile(null);
       setIsParentMode(false);
       setParentModeExpiresAt(null);
+      setLoadError("");
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
-    const [nextChildren, nextQuestions, nextAttempts, securityProfile] = await Promise.all([
-      getChildren(activeUser.id),
-      getQuestions(activeUser.id),
-      getAttempts(activeUser.id),
-      getParentSecurityProfile(activeUser.id),
-    ]);
+    setLoadError("");
+    try {
+      const [nextChildren, nextQuestions, nextAttempts, securityProfile] = await Promise.all([
+        getChildren(activeUser.id),
+        getQuestions(activeUser.id),
+        getAttempts(activeUser.id),
+        getParentSecurityProfile(activeUser.id),
+      ]);
 
-    setChildren(nextChildren);
-    setQuestions(nextQuestions);
-    setAttempts(nextAttempts);
-    setParentSecurityProfile(securityProfile);
+      setChildren(nextChildren);
+      setQuestions(nextQuestions);
+      setAttempts(nextAttempts);
+      setParentSecurityProfile(securityProfile);
 
-    const unlockUntil = Number(sessionStorage.getItem(parentUnlockKey(activeUser.id)) ?? 0);
-    const isUnlocked = Boolean(securityProfile && unlockUntil > Date.now());
-    if (securityProfile && !isUnlocked) {
-      sessionStorage.removeItem(parentUnlockKey(activeUser.id));
+      const unlockUntil = Number(sessionStorage.getItem(parentUnlockKey(activeUser.id)) ?? 0);
+      const isUnlocked = Boolean(securityProfile && unlockUntil > Date.now());
+      if (securityProfile && !isUnlocked) {
+        sessionStorage.removeItem(parentUnlockKey(activeUser.id));
+      }
+      setIsParentMode(!securityProfile || isUnlocked);
+      setParentModeExpiresAt(isUnlocked ? unlockUntil : null);
+
+      const savedChildId = localStorage.getItem(SELECTED_CHILD_KEY);
+      const nextSelected =
+        nextChildren.find((child) => child.id === savedChildId)?.id ??
+        nextChildren[0]?.id ??
+        null;
+      setSelectedChildId(nextSelected);
+      if (nextSelected) localStorage.setItem(SELECTED_CHILD_KEY, nextSelected);
+      setAiUsage(activeUser.isDemo ? getAIUsage() : getGoogleAIUsageSummary());
+    } catch (error) {
+      setChildren([]);
+      setQuestions([]);
+      setAttempts([]);
+      setParentSecurityProfile(null);
+      setIsParentMode(false);
+      setParentModeExpiresAt(null);
+      setLoadError(error instanceof Error ? error.message : "資料載入失敗，請稍後再試。");
+    } finally {
+      setIsLoading(false);
     }
-    setIsParentMode(!securityProfile || isUnlocked);
-    setParentModeExpiresAt(isUnlocked ? unlockUntil : null);
-
-    const savedChildId = localStorage.getItem(SELECTED_CHILD_KEY);
-    const nextSelected =
-      nextChildren.find((child) => child.id === savedChildId)?.id ??
-      nextChildren[0]?.id ??
-      null;
-    setSelectedChildId(nextSelected);
-    if (nextSelected) localStorage.setItem(SELECTED_CHILD_KEY, nextSelected);
-    setAiUsage(activeUser.isDemo ? getAIUsage() : getGoogleAIUsageSummary());
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -503,6 +518,7 @@ export function AppDataProvider({ children: appChildren }: { children: ReactNode
     () => ({
       user,
       isLoading,
+      loadError,
       children,
       questions,
       attempts,
@@ -539,6 +555,7 @@ export function AppDataProvider({ children: appChildren }: { children: ReactNode
     [
       user,
       isLoading,
+      loadError,
       children,
       questions,
       attempts,

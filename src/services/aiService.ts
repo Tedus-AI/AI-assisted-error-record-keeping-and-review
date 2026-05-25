@@ -46,6 +46,28 @@ const comparisonOptions: QuestionOption[] = [
   { label: "C", text: "=" },
 ];
 
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resetDailyUsageIfNeeded(state: ReturnType<typeof getLocalState>) {
+  const lastDate = state.aiUsage.lastAiCallAt
+    ? localDateKey(new Date(state.aiUsage.lastAiCallAt))
+    : "";
+  if (lastDate === localDateKey()) return state;
+
+  return {
+    ...state,
+    aiUsage: {
+      ...state.aiUsage,
+      dailyAiCallCount: 0,
+    },
+  };
+}
+
 export class AIQuestionDebugError extends Error {
   debug: AIDebugSnapshot;
 
@@ -71,7 +93,7 @@ export async function analyzeQuestion(
     throw new Error("尚未設定 Google AI Studio API Key，請先到設定頁填入 API Key 與模型。");
   }
 
-  const state = getLocalState();
+  const state = resetDailyUsageIfNeeded(getLocalState());
   if (state.aiUsage.dailyAiCallCount >= 10) {
     throw new Error("AI 解析今日額度已用完，請明天再試或改用手動新增。");
   }
@@ -771,6 +793,23 @@ function scoreAIJsonRecord(record: Record<string, unknown>): number {
   return score;
 }
 
+function normalizeCorrectAnswer(rawAnswer: string, answerType: AnswerType) {
+  const normalized = rawAnswer.trim().toUpperCase();
+  if (answerType === "true_false") {
+    const compact = normalized.replace(/\s+/g, "");
+    const trueValues = new Set(["A", "對", "TRUE", "T", "YES", "Y", "O", "○", "〇", "✓", "✔"]);
+    const falseValues = new Set(["B", "錯", "FALSE", "F", "NO", "N", "X", "×", "✕", "✖"]);
+    if (trueValues.has(compact)) return "A";
+    if (falseValues.has(compact)) return "B";
+  }
+
+  if (answerType === "comparison") {
+    return { ">": "A", "<": "B", "=": "C" }[normalized] ?? normalized;
+  }
+
+  return normalized;
+}
+
 function normalizeAIResult(
   value: unknown,
   input: Pick<AnalyzeQuestionInput, "subject" | "questionType">
@@ -794,11 +833,7 @@ function normalizeAIResult(
             text: String(rawOptions.find((option) => option?.label === label)?.text ?? rawOptions[index]?.text ?? ""),
           }));
 
-  const rawCorrectAnswer = String(data.correctAnswer ?? "A").trim().toUpperCase();
-  const correctAnswer =
-    answerType === "comparison"
-      ? ({ ">": "A", "<": "B", "=": "C" }[rawCorrectAnswer] ?? rawCorrectAnswer)
-      : rawCorrectAnswer;
+  const correctAnswer = normalizeCorrectAnswer(String(data.correctAnswer ?? "A"), answerType);
   const confidence = Number(data.confidence);
   const originalQuestionText = String(data.originalQuestionText ?? "").trim();
   const convertedQuestion = String(
